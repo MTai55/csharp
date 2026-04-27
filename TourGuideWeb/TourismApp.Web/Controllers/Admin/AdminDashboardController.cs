@@ -15,7 +15,7 @@ public class AdminDashboardController(ApiService api, ILogger<AdminDashboardCont
         {
             logger.LogInformation("🔍[AdminDashboard] Fetching admin stats...");
             var stats = await api.GetAdminStatsAsync();
-            logger.LogInformation($"✅ [AdminDashboard] Stats loaded: Users={stats?.TotalUsers}, Places={stats?.TotalPlaces}");
+            logger.LogInformation($"✅ [AdminDashboard] Stats loaded: Users={stats?.TotalUsers} , Places={stats?.TotalPlaces}");
             return View(stats);
         }
         catch (Exception ex)

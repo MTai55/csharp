@@ -1383,7 +1383,7 @@ sequenceDiagram
     User->>MapPage: Tap "Chỉ đường"
     MapPage->>LS: LastKnownLocation
     LS-->>MapPage: (userLat, userLon)
-    MapPage->>OSRM: GET /route/v1/driving/{origin};{dest}?overview=full&geometries=geojson
+    MapPage->>OSRM: GET /route/v1/driving/{origin};{dest}?overview=full&amp;geometries=geojson
     OSRM-->>MapPage: GeoJSON polyline
     MapPage->>Mapsui: Vẽ "Route" layer (#E94560) + "Destination" marker
     MapPage->>Mapsui: Zoom to route bounds
@@ -1401,8 +1401,6 @@ sequenceDiagram
     OSRM-->>MapPage: Polyline
     MapPage-->>User: Route + CancelRoutePanel
 ```
-
----
 
 #### 13.4.3 TTS tự động — Geofence (UC5, UC14, UC15)
 
@@ -1442,7 +1440,7 @@ sequenceDiagram
                 end
             end
         else candidates có POI
-            GE->>GE: top = sort PlaceId ASC (PlaceId nhỏ hơn → ưu tiên trước)
+            GE->>GE: top = sort Priority DESC → Distance ASC → PlaceId ASC
             alt POI mới khác _pendingPlaceId
                 GE->>GE: _pendingPlaceId = topId, _pendingFirstSeenAt = now
                 GE-->>MapPage: null (chờ debounce 2s)

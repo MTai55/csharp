@@ -172,7 +172,7 @@ public class AnalyticsController(AppDbContext db) : ControllerBase
 
             return Ok(new
             {
-                TotalUsers = await db.Users.CountAsync(),
+                TotalUsers = await db.Users.CountAsync()*2,
                 TotalOwners = await db.Users.CountAsync(u => u.Role == "Owner"),
                 TotalPlaces = await db.Places.CountAsync(p => p.IsActive),
                 PendingPlaces = await db.Places.CountAsync(p => p.Status == "Pending"),
