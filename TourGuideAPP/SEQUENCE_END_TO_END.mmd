@@ -1,38 +1,59 @@
 sequenceDiagram
     autonumber
-    title END-TO-END - Từ mở app đến nghe audio
+    title END-TO-END - From App Launch to Audio Narration
 
     actor User
     participant App as MAUI App
     participant Pref as Preferences
     participant DB as Supabase
+    participant PlaceService
     participant Loc as LocationService
     participant Geo as GeofenceEngine
-    participant Audio as NarrationService
+    participant TTS as NarrationService
 
-    User->>App: Mở app
-    App->>Pref: Đọc DeviceId / SessionId / ExpiresAt
-    Pref-->>App: Session data
+    User->>App: Launch app
+    App->>Pref: Read DeviceId, SessionId, ExpiresAt
+    Pref-->>App: Return session data
 
-    alt Session hợp lệ
-        App->>DB: GET /places
-        DB-->>App: Danh sách địa điểm
-        App->>App: Cache địa điểm
-        User->>App: Mở MapPage
+    Note over App: Check if session is valid
+    App->>App: Compare ExpiresAt with now
+
+    rect rgba(144, 238, 144, 0.2)
+        Note over App: Session is valid - continue
+        App->>PlaceService: Load places with TTS contents
+        PlaceService->>DB: GET places WHERE IsActive AND IsApproved
+        DB-->>PlaceService: Return places + images + TTS data
+        PlaceService->>PlaceService: Cache in RAM memory
+        PlaceService-->>App: Places ready
+        
+        User->>App: Open Map Tab
+        App->>Loc: Register LocationChanged listener
         App->>Loc: Start GPS tracking
 
-        loop Mỗi GPS update
-            Loc->>Geo: Kiểm tra POI gần nhất
-            Geo->>Geo: Lọc theo radius / cooldown / priority
-            Geo-->>Loc: POI phù hợp hoặc không có
+        loop Every GPS Location Update
+            Loc->>Loc: Emit LocationChanged event
+            Loc->>App: Update user marker on map
+            Loc->>Geo: Send current coordinates
 
-            alt Có POI phù hợp
-                Loc->>Audio: SpeakAsync(tts_script, tts_locale)
-                Audio-->>User: Phát audio guide
-            else Không có POI
-                Loc->>Loc: Tiếp tục tracking
-            end
+            Geo->>Geo: Filter places with TTS script
+            Geo->>Geo: Filter by radius (default 50m)
+            Geo->>Geo: Filter by cooldown status
+            Geo->>Geo: Sort by Priority DESC, Distance ASC
+            Geo->>Geo: Apply 2-second debounce
+
+            Note over Geo: Debounce satisfied - POI found
+            Geo->>TTS: Get narration script for locale
+            TTS-->>Geo: Return TTS text
+            Geo->>TTS: Call SpeakAsync(script, locale)
+            TTS-->>User: Play audio narration
+
+            Geo->>Geo: Update place.LastPlayedAt
+            Geo->>App: Return POI to MapPage
         end
-    else Session hết hạn hoặc chưa có
-        App->>App: Mở SubscriptionPage
+    end
+
+    rect rgba(255, 99, 71, 0.2)
+        Note over App: Session expired or invalid
+        App->>Pref: Clear session data
+        App->>App: Navigate to SubscriptionPage
     end
