@@ -35,7 +35,6 @@
       ("storefront",  (Model?.TotalPlaces ?? 0).ToString(),           "Tổng quán",           "text-primary"),
       ("check_circle",(Model?.ApprovedPlaces ?? 0).ToString(),        "Đang hoạt động",      "text-emerald-600"),
       ("trending_up", (Model?.TotalVisitsThisMonth ?? 0).ToString(),  "Lượt ghé (30 ngày)",  "text-blue-600"),
-      ("star",        (Model?.AvgRating ?? 0).ToString("F1"),         "Điểm TB",             "text-amber-600"),
     };
   }
   @foreach (var (icon, val, label, color) in stats)
