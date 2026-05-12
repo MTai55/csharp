@@ -150,41 +150,57 @@ public class AnalyticsController(AppDbContext db) : ControllerBase
     {
         try
         {
-            int totalReviews;
-            try
-            {
-                totalReviews = await db.Reviews.CountAsync();
-            }
-            catch (PostgresException ex) when (ex.SqlState == "42P01")
-            {
-                totalReviews = 0;
-            }
+            // Gộp user counts vào 1 query
+            var userStats = await db.Users
+                .GroupBy(_ => 1)
+                .Select(g => new
+                {
+                    TotalUsers = g.Count(),
+                    TotalOwners = g.Count(u => u.Role == "Owner")
+                })
+                .FirstOrDefaultAsync();
 
-            int hiddenReviews;
+            // Gộp place counts vào 1 query
+            var placeStats = await db.Places
+                .Where(p => p.IsActive)
+                .GroupBy(_ => 1)
+                .Select(g => new
+                {
+                    TotalPlaces = g.Count(),
+                    PendingPlaces = g.Count(p => p.Status == "Pending"),
+                    ActivePlaces = g.Count(p => p.Status == "Active"),
+                    AvgRating = g.Average(p => (double)p.AverageRating)
+                })
+                .FirstOrDefaultAsync();
+
+            // Gộp review counts vào 1 query
+            int totalReviews = 0, hiddenReviews = 0;
             try
             {
-                hiddenReviews = await db.Reviews.CountAsync(r => r.IsHidden);
+                var reviewStats = await db.Reviews
+                    .GroupBy(_ => 1)
+                    .Select(g => new { Total = g.Count(), Hidden = g.Count(r => r.IsHidden) })
+                    .FirstOrDefaultAsync();
+                totalReviews = reviewStats?.Total ?? 0;
+                hiddenReviews = reviewStats?.Hidden ?? 0;
             }
-            catch (PostgresException ex) when (ex.SqlState == "42P01")
-            {
-                hiddenReviews = 0;
-            }
+            catch (PostgresException ex) when (ex.SqlState == "42P01") { }
+
+            var onlineDevices = await db.DeviceRegistrations
+                .CountAsync(d => d.LastSeenAt >= DateTime.UtcNow.AddSeconds(-15));
 
             return Ok(new
             {
-                TotalUsers = await db.Users.CountAsync(),
-                TotalOwners = await db.Users.CountAsync(u => u.Role == "Owner"),
-                TotalPlaces = await db.Places.CountAsync(p => p.IsActive),
-                PendingPlaces = await db.Places.CountAsync(p => p.Status == "Pending"),
-                ActivePlaces = await db.Places.CountAsync(p => p.Status == "Active"),
-                TotalReviews = totalReviews,
+                TotalUsers    = userStats?.TotalUsers ?? 0,
+                TotalOwners   = userStats?.TotalOwners ?? 0,
+                TotalPlaces   = placeStats?.TotalPlaces ?? 0,
+                PendingPlaces = placeStats?.PendingPlaces ?? 0,
+                ActivePlaces  = placeStats?.ActivePlaces ?? 0,
+                TotalReviews  = totalReviews,
                 HiddenReviews = hiddenReviews,
-                OnlineDevices = await db.DeviceRegistrations.CountAsync(d => d.LastSeenAt >= DateTime.UtcNow.AddSeconds(-15)),
-                // NOTE: VisitHistory table doesn't exist in Supabase - temporarily disabled
-                TotalVisitsToday = 0,   // await db.VisitHistory.CountAsync(v => v.CheckInTime >= DateTime.UtcNow.Date),
-                AvgRating = await db.Places
-                    .Where(p => p.Status == "Active")
-                    .AverageAsync(p => p.AverageRating)
+                OnlineDevices = onlineDevices,
+                TotalVisitsToday = 0,
+                AvgRating     = placeStats?.AvgRating ?? 0
             });
         }
         catch (Exception ex)

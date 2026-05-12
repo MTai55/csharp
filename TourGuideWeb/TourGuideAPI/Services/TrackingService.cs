@@ -71,35 +71,44 @@ public class TrackingService(AppDbContext db, IGeoLocationService geo, IConfigur
 
     public async Task<TripStatsDto> GetTripStatsAsync(int userId)
     {
-        var visits = await db.VisitHistory
-            .Include(v => v.Place).ThenInclude(p => p!.Images)
+        var aggregate = await db.VisitHistory
+            .Where(v => v.UserId == userId)
+            .GroupBy(_ => userId)
+            .Select(g => new
+            {
+                TotalVisits = g.Count(),
+                UniquePlaces = g.Select(v => v.PlaceId).Distinct().Count(),
+                TotalMinutesSpent = g.Sum(v => v.DurationMins ?? 0)
+            })
+            .FirstOrDefaultAsync();
+
+        var recentVisits = await db.VisitHistory
             .Where(v => v.UserId == userId)
             .OrderByDescending(v => v.CheckInTime)
+            .Take(10)
+            .Select(v => new VisitSummaryDto(
+                v.VisitId, v.PlaceId, v.Place!.Name,
+                v.Place.Images.Where(i => i.IsMain).Select(i => i.ImageUrl).FirstOrDefault(),
+                v.CheckInTime, v.DurationMins))
             .ToListAsync();
 
-        var stats = new TripStatsDto(
-            TotalVisits: visits.Count,
-            UniquePlaces: visits.Select(v => v.PlaceId).Distinct().Count(),
-            TotalDistanceKm: 0, // tính từ GPS log nếu cần
-            TotalMinutesSpent: visits.Sum(v => v.DurationMins ?? 0),
-            RecentVisits: visits.Take(10).Select(v => new VisitSummaryDto(
-                v.VisitId, v.PlaceId, v.Place!.Name,
-                v.Place.Images.FirstOrDefault(i => i.IsMain)?.ImageUrl,
-                v.CheckInTime, v.DurationMins
-            )).ToList()
+        return new TripStatsDto(
+            TotalVisits: aggregate?.TotalVisits ?? 0,
+            UniquePlaces: aggregate?.UniquePlaces ?? 0,
+            TotalDistanceKm: 0,
+            TotalMinutesSpent: aggregate?.TotalMinutesSpent ?? 0,
+            RecentVisits: recentVisits
         );
-        return stats;
     }
 
     public async Task<List<VisitSummaryDto>> GetVisitHistoryAsync(int userId, int page = 1)
         => await db.VisitHistory
-            .Include(v => v.Place).ThenInclude(p => p!.Images)
             .Where(v => v.UserId == userId)
             .OrderByDescending(v => v.CheckInTime)
             .Skip((page - 1) * 20).Take(20)
             .Select(v => new VisitSummaryDto(
                 v.VisitId, v.PlaceId, v.Place!.Name,
-                v.Place.Images.FirstOrDefault(i => i.IsMain)!.ImageUrl,
+                v.Place.Images.Where(i => i.IsMain).Select(i => i.ImageUrl).FirstOrDefault(),
                 v.CheckInTime, v.DurationMins))
             .ToListAsync();
 }

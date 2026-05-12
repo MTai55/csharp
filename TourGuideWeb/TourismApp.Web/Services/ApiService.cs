@@ -254,9 +254,10 @@ public class ApiService(HttpClient http, IHttpContextAccessor accessor, ILogger<
 
     public Task<List<UserViewModel>?> GetUsersAsync(string? search, string? role)
     {
-        var url = "/api/admin/users";
-        if (!string.IsNullOrEmpty(search)) url += $"?search={search}";
-        if (!string.IsNullOrEmpty(role)) url += $"&role={role}";
+        var query = new System.Collections.Generic.List<string>();
+        if (!string.IsNullOrEmpty(search)) query.Add($"search={Uri.EscapeDataString(search)}");
+        if (!string.IsNullOrEmpty(role))   query.Add($"role={Uri.EscapeDataString(role)}");
+        var url = "/api/admin/users" + (query.Count > 0 ? "?" + string.Join("&", query) : "");
         return GetAsync<List<UserViewModel>>(url);
     }
 

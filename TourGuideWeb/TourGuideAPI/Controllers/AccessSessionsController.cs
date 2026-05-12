@@ -109,12 +109,24 @@ public class AccessSessionsController(AppDbContext db) : ControllerBase
     public async Task<IActionResult> GetStats()
     {
         var now = DateTime.UtcNow;
-        var pending  = await db.AccessSessions.CountAsync(s => !s.IsActive && s.ActivatedAt == null);
-        var active   = await db.AccessSessions.CountAsync(s => s.IsActive && s.ExpiresAt > now);
-        var total    = await db.AccessSessions.CountAsync();
-        var revenue  = await db.AccessSessions.Where(s => s.IsActive).SumAsync(s => (long)s.PriceVnd);
+        var stats = await db.AccessSessions
+            .GroupBy(_ => 1)
+            .Select(g => new
+            {
+                Total   = g.Count(),
+                Pending = g.Count(s => !s.IsActive && s.ActivatedAt == null),
+                Active  = g.Count(s => s.IsActive && s.ExpiresAt > now),
+                Revenue = g.Where(s => s.IsActive).Sum(s => (long)s.PriceVnd)
+            })
+            .FirstOrDefaultAsync();
 
-        return Ok(new { pending, active, total, revenue });
+        return Ok(new
+        {
+            pending = stats?.Pending ?? 0,
+            active  = stats?.Active  ?? 0,
+            total   = stats?.Total   ?? 0,
+            revenue = stats?.Revenue ?? 0
+        });
     }
 }
 

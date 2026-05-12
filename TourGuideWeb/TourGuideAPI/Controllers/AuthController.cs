@@ -35,8 +35,8 @@ public class AuthController(IAuthService auth, AppDbContext db) : ControllerBase
         return Ok(result); ;
     }
 
+#if DEBUG
     // DEBUG: POST /api/auth/debug-login/{userId}
-    // Purpose: Login as any user without password (for testing only)
     [HttpPost("debug-login/{userId}")]
     public async Task<IActionResult> DebugLogin(int userId, [FromServices] IAuthService authService)
     {
@@ -56,6 +56,7 @@ public class AuthController(IAuthService auth, AppDbContext db) : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
     }
+#endif
 
     // POST /api/auth/refresh
     [HttpPost("refresh")]

@@ -124,7 +124,7 @@ graph LR
     subgraph WEB_ADMIN["  Web Admin  "]
         UC23(["Xem thống kê & bản đồ"])
         UC24(["Quản lý user"])
-        UC25(["Duyệt / suspend địa điểm"])
+        UC25(["Suspend địa điểm"])
         UC26(["Kích hoạt / Thu hồi / Hủy session"])
         UC27(["Chỉnh giá & cấu hình gói"])
         UC28(["Xem danh sách thiết bị"])
@@ -166,11 +166,11 @@ graph LR
 
     UC1 -. include .-> UC2
     UC2 -. include .-> UC12
-    UC4 -. include .-> UC3
+    UC4 -. extend .-> UC3
     UC5 -. include .-> UC14
     UC14 -. include .-> UC15
-    UC11 -. include .-> UC2
-    UC12 -. extend .-> UC26
+    UC18 -. include .-> UC19
+    UC18 -. include .-> UC20
 ```
 
 ---
@@ -1159,126 +1159,265 @@ classDiagram
 
 ```mermaid
 classDiagram
+    %% ── DATABASE CONTEXT ────────────────────────────────────────────
     class AppDbContext {
         +DbSet~User~ Users
         +DbSet~Place~ Places
         +DbSet~PlaceImage~ PlaceImages
+        +DbSet~PlaceTtsContent~ PlaceTtsContents
         +DbSet~Category~ Categories
         +DbSet~Review~ Reviews
         +DbSet~RefreshToken~ RefreshTokens
         +DbSet~Promotion~ Promotions
         +DbSet~SubscriptionPlan~ SubscriptionPlans
         +DbSet~Subscription~ Subscriptions
-        +DbSet~DevicePoiVisit~ DevicePoiVisits
         +DbSet~AccessPackage~ AccessPackages
-        +DbSet~DeviceRegistration~ DeviceRegistrations
         +DbSet~AccessSession~ AccessSessions
-        +DbSet~UserTracking~ UserTracking
+        +DbSet~DeviceRegistration~ DeviceRegistrations
+        +DbSet~DevicePoiVisit~ DevicePoiVisits
         +DbSet~VisitHistory~ VisitHistory
     }
 
-    class AuthController {
+    %% ── API CONTROLLERS ─────────────────────────────────────────────
+    class AuthController_API {
+        <<API /api/auth>>
         +Register(RegisterDto) Task~ActionResult~
         +Login(LoginDto) Task~ActionResult~
         +Refresh(token) Task~ActionResult~
         +Revoke() Task~ActionResult~
         +Me() Task~ActionResult~
+        +GetProfile() Task~ActionResult~
+        +UpdateProfile(dto) Task~ActionResult~
+        +ChangePassword(dto) Task~ActionResult~
     }
 
-    class PlacesController {
+    class PlacesController_API {
+        <<API /api/places — OwnerOnly write>>
         +GetAll(filters) Task~ActionResult~
         +GetById(id) Task~ActionResult~
         +GetNearby(dto) Task~ActionResult~
         +GetMine(search, page) Task~ActionResult~
         +Create(dto) Task~ActionResult~
         +Update(id, dto) Task~ActionResult~
-        +UpdateStatus(id, status) Task~ActionResult~
+        +UpdateOpenStatus(id, status) Task~ActionResult~
+        +UpdateTtsScript(id, script) Task~ActionResult~
+        +TranslateTts(id) Task~ActionResult~
         +AddImage(id, dto) Task~ActionResult~
         +DeleteImage(id, imageId) Task~ActionResult~
         +Delete(id) Task~ActionResult~
+        +GetTtsContents(id) Task~ActionResult~
+        +CreateTtsContent(id, dto) Task~ActionResult~
+        +UpdateTtsContent(id, contentId, dto) Task~ActionResult~
+        +DeleteTtsContent(id, contentId) Task~ActionResult~
     }
 
-    class ReviewsController {
+    class ReviewsController_API {
+        <<API /api/reviews>>
         +GetByPlace(placeId, page) Task~ActionResult~
         +Create(dto) Task~ActionResult~
         +Reply(id, reply) Task~ActionResult~
     }
 
-    class AdminController {
+    class AdminController_API {
+        <<API /api/admin — AdminOnly>>
         +GetUsers(search, role) Task~ActionResult~
         +ToggleLock(id) Task~ActionResult~
         +ChangeRole(id, role) Task~ActionResult~
         +GetPlaces(pendingOnly) Task~ActionResult~
-        +ApprovePlace(id) Task~ActionResult~
         +SuspendPlace(id) Task~ActionResult~
-        +GetReviews(hiddenOnly) Task~ActionResult~
-        +HideReview(id) Task~ActionResult~
-        +GetStats() Task~ActionResult~
     }
 
-    class AccessSessionsController {
+    class AnalyticsController_API {
+        <<API /api/analytics>>
+        +GetDashboard() Task~ActionResult~ OwnerOnly
+        +GetAdminStats() Task~ActionResult~ AdminOnly
+    }
+
+    class AccessSessionsController_API {
+        <<API /api/admin/sessions — AdminOnly>>
         +GetSessions(status, page, pageSize, search) Task~ActionResult~
-        +Activate(sessionId Guid) Task~ActionResult~
-        +Deactivate(sessionId Guid) Task~ActionResult~
-        +Delete(sessionId Guid) Task~ActionResult~
+        +Activate(sessionId) Task~ActionResult~
+        +Deactivate(sessionId) Task~ActionResult~
+        +Delete(sessionId) Task~ActionResult~
         +GetStats() Task~ActionResult~
     }
 
-    class AccessPackagesController {
+    class AccessPackagesController_API {
+        <<API /api/access-packages>>
         +GetAll() Task~ActionResult~
-        +Update(id, UpdatePackageDto) Task~ActionResult~
+        +Update(id, dto) Task~ActionResult~
     }
 
-    class DeviceAnalyticsController {
+    class SubscriptionController_API {
+        <<API /api/subscriptions — OwnerOnly>>
+        +GetPlans() Task~ActionResult~
+        +GetMine() Task~ActionResult~
+        +GetHistory() Task~ActionResult~
+        +CreateSubscription(dto) Task~ActionResult~
+        +SuccessCallback(vnpParams) Task~ActionResult~
+        +FailedCallback() Task~ActionResult~
+        +Cancel(subId) Task~ActionResult~
+    }
+
+    class DeviceAnalyticsController_API {
+        <<API /api/admin/devices — AdminOnly>>
         +GetDeviceStats(page, pageSize, search) Task~ActionResult~
         +GetDeviceVisitHistory(deviceId, limit) Task~ActionResult~
     }
 
+    %% ── MVC CONTROLLERS ─────────────────────────────────────────────
+    class AuthController_MVC {
+        <<MVC /Auth>>
+        +Register() IActionResult
+        +Login() IActionResult
+        +Logout() IActionResult
+    }
+
+    class DashboardController_MVC {
+        <<MVC /Dashboard — OwnerOnly>>
+        +Index() Task~IActionResult~
+    }
+
+    class PlacesController_MVC {
+        <<MVC /Places — OwnerOnly>>
+        +Index(search, page) Task~IActionResult~
+        +Create() IActionResult
+        +Edit(id) Task~IActionResult~
+        +Delete(id) Task~IActionResult~
+        +UpdateOpenStatus(id, openStatus) Task~IActionResult~
+        +UpdateTtsScript(id, ttsScript) Task~IActionResult~
+        +Map() Task~IActionResult~
+    }
+
+    class ProfileController_MVC {
+        <<MVC /Profile — OwnerOnly>>
+        +Index() Task~IActionResult~
+        +Edit(vm) Task~IActionResult~
+        +ChangePassword(vm) Task~IActionResult~
+    }
+
+    class SubscriptionController_MVC {
+        <<MVC /Subscription — OwnerOnly>>
+        +Plans() Task~IActionResult~
+        +Checkout(planId, paymentMethod) Task~IActionResult~
+        +Success(vnpParams) Task~IActionResult~
+        +Failed() IActionResult
+        +History() Task~IActionResult~
+        +Cancel(subId) Task~IActionResult~
+    }
+
+    class AdminDashboardController_MVC {
+        <<MVC /Admin/AdminDashboard — AdminOnly>>
+        +Index() Task~IActionResult~
+        +Map() Task~IActionResult~
+    }
+
+    class AdminPlacesController_MVC {
+        <<MVC /Admin/AdminPlaces — AdminOnly>>
+        +Index(pendingOnly, search, page) Task~IActionResult~
+        +Detail(id) Task~IActionResult~
+        +Suspend(placeId) Task~IActionResult~
+    }
+
+    class AdminUsersController_MVC {
+        <<MVC /Admin/AdminUsers — AdminOnly>>
+        +Index(search, role) Task~IActionResult~
+        +ToggleLock(userId) Task~IActionResult~
+        +ChangeRole(userId, role) Task~IActionResult~
+    }
+
     class AdminSessionsController_MVC {
-        -ApiService _api
+        <<MVC /Admin/Sessions — AdminOnly>>
         +Index(status, page, search) Task~IActionResult~
-        +Activate(sessionId Guid, returnStatus) Task~IActionResult~
-        +Cancel(sessionId Guid) Task~IActionResult~
-        +Deactivate(sessionId Guid, returnStatus) Task~IActionResult~
+        +Activate(sessionId, returnStatus) Task~IActionResult~
+        +Deactivate(sessionId, returnStatus) Task~IActionResult~
+        +Cancel(sessionId) Task~IActionResult~
     }
 
     class AdminPackagesController_MVC {
-        -ApiService _api
+        <<MVC /Admin/AdminPackages — AdminOnly>>
         +Index() Task~IActionResult~
         +Update(packageId, dto) Task~IActionResult~
     }
 
     class AdminDevicesController_MVC {
-        -ApiService _api
+        <<MVC /Admin/AdminDevices — AdminOnly>>
         +Index(page, search) Task~IActionResult~
         +Detail(deviceId) Task~IActionResult~
     }
 
+    %% ── API SERVICE (MVC HTTP client layer) ─────────────────────────
     class ApiService {
+        +LoginAsync(email, password) Task
+        +RegisterAsync(vm) Task
+        +GetProfileAsync() Task
+        +UpdateProfileAsync(vm) Task
+        +ChangePasswordAsync(vm) Task
+        +GetPlacesAsync(filters) Task
+        +GetPlaceAsync(id) Task
+        +GetMyPlacesAsync(page, search) Task
+        +CreatePlaceAsync(vm) Task
+        +UpdatePlaceAsync(id, vm) Task
+        +UpdateOpenStatusAsync(id, status) Task
+        +UpdateTtsScriptAsync(id, script) Task
+        +GetTtsContentsAsync(placeId) Task
+        +CreateTtsContentAsync(placeId, locale, script) Task
+        +UpdateTtsContentAsync(placeId, contentId, script) Task
+        +DeleteTtsContentAsync(placeId, contentId) Task
+        +DeletePlaceAsync(id) Task
+        +GetDashboardAsync() Task
+        +GetAdminStatsAsync() Task
+        +GetUsersAsync(search, role) Task
+        +ToggleUserLockAsync(id) Task
+        +ChangeUserRoleAsync(id, role) Task
+        +GetAdminPlacesAsync(pendingOnly) Task
+        +SuspendPlaceAsync(id) Task
         +GetSessionsAsync(status, page, search) Task
         +GetSessionStatsAsync() Task
-        +ActivateSessionAsync(sessionId Guid) Task
-        +DeactivateSessionAsync(sessionId Guid) Task
-        +DeleteSessionAsync(sessionId Guid) Task
+        +ActivateSessionAsync(sessionId) Task
+        +DeactivateSessionAsync(sessionId) Task
+        +DeleteSessionAsync(sessionId) Task
         +GetAccessPackagesAsync() Task
         +UpdateAccessPackageAsync(id, dto) Task
         +GetDeviceStatsAsync(page, search) Task
         +GetDeviceVisitsAsync(deviceId) Task
+        +GetSubscriptionPlansAsync() Task
+        +GetMySubscriptionAsync() Task
+        +GetSubscriptionHistoryAsync() Task
+        +CreateSubscriptionAsync(planId, method) Task
+        +CancelSubscriptionAsync(subId) Task
     }
 
-    AccessSessionsController --> AppDbContext
-    AccessPackagesController --> AppDbContext
-    DeviceAnalyticsController --> AppDbContext
-    PlacesController --> AppDbContext
-    ReviewsController --> AppDbContext
-    AdminController --> AppDbContext
-    AuthController --> AppDbContext
+    %% ── RELATIONSHIPS ───────────────────────────────────────────────
+    AuthController_API --> AppDbContext
+    PlacesController_API --> AppDbContext
+    ReviewsController_API --> AppDbContext
+    AdminController_API --> AppDbContext
+    AnalyticsController_API --> AppDbContext
+    AccessSessionsController_API --> AppDbContext
+    AccessPackagesController_API --> AppDbContext
+    SubscriptionController_API --> AppDbContext
+    DeviceAnalyticsController_API --> AppDbContext
+
+    DashboardController_MVC --> ApiService
+    PlacesController_MVC --> ApiService
+    ProfileController_MVC --> ApiService
+    SubscriptionController_MVC --> ApiService
+    AdminDashboardController_MVC --> ApiService
+    AdminPlacesController_MVC --> ApiService
+    AdminUsersController_MVC --> ApiService
     AdminSessionsController_MVC --> ApiService
     AdminPackagesController_MVC --> ApiService
     AdminDevicesController_MVC --> ApiService
-    ApiService ..> AccessSessionsController : HTTP calls
-    ApiService ..> AccessPackagesController : HTTP calls
-    ApiService ..> DeviceAnalyticsController : HTTP calls
+
+    ApiService ..> AuthController_API : HTTP
+    ApiService ..> PlacesController_API : HTTP
+    ApiService ..> AnalyticsController_API : HTTP
+    ApiService ..> AdminController_API : HTTP
+    ApiService ..> AccessSessionsController_API : HTTP
+    ApiService ..> AccessPackagesController_API : HTTP
+    ApiService ..> SubscriptionController_API : HTTP
+    ApiService ..> DeviceAnalyticsController_API : HTTP
 ```
 
 ---
@@ -1643,191 +1782,38 @@ sequenceDiagram
 
 ---
 
-#### 13.5.2 Admin Dashboard Sequences — Chi tiết
-
-##### 13.5.2.1 Xem danh sách chờ kích hoạt (Pending Payments)
+#### 13.5.2 Admin Dashboard & Thống kê (UC23)
 
 ```mermaid
 sequenceDiagram
     actor Admin
-    participant AdminUI as Admin Web
-    participant API as TourGuideAPI
-    participant AuthService
-    participant DB as Supabase / PostgreSQL
+    participant DashMVC as AdminDashboardController (MVC)
+    participant API as ApiService
+    participant AnalyticsAPI as AnalyticsController (API)
+    participant AdminAPI as AdminController (API)
+    participant DB as AppDbContext
 
-    Admin->>AdminUI: Mở tab "Pending Payments"
-    AdminUI->>API: GET /api/admin/pending-sessions (JWT)
-    API->>AuthService: Validate JWT token
-    AuthService-->>API: Token valid + user role
-    
-    alt Người dùng có quyền admin
-        API->>DB: SELECT * FROM AccessSessions WHERE IsActive = false AND CreatedAt > NOW() - 24h
-        DB-->>API: Trả danh sách pending
-        API-->>AdminUI: [{ SessionId, DeviceId, PackageId, Amount, DeviceInfo, CreatedAt }, ...]
-        AdminUI-->>Admin: Hiển thị bảng pending payments
-    else Không phải admin
-        API-->>AdminUI: Forbidden 403
-        AdminUI-->>Admin: Hiển thị lỗi quyền truy cập
-    end
+    Admin->>DashMVC: GET /Admin/AdminDashboard [AdminOnly]
+    DashMVC->>API: GetAdminStatsAsync()
+    API->>AnalyticsAPI: GET /api/analytics/admin/stats [JWT AdminOnly]
+    AnalyticsAPI->>DB: GROUP users → COUNT Total + Owners (1 query)
+    AnalyticsAPI->>DB: GROUP places IsActive → COUNT Total/Pending/Active + AVG Rating (1 query)
+    AnalyticsAPI->>DB: GROUP reviews → COUNT Total + Hidden (1 query)
+    AnalyticsAPI->>DB: COUNT DeviceRegistrations WHERE LastSeenAt >= UtcNow-15s
+    DB-->>AnalyticsAPI: Aggregated results
+    AnalyticsAPI-->>API: {TotalUsers, TotalOwners, TotalPlaces, PendingPlaces, ActivePlaces, TotalReviews, HiddenReviews, OnlineDevices, AvgRating}
+    API-->>DashMVC: AdminStatsViewModel
+    DashMVC-->>Admin: Cards thống kê (Users, Places, Reviews, Devices online)
+
+    Note over Admin,DashMVC: Admin xem bản đồ toàn bộ địa điểm
+    Admin->>DashMVC: GET /Admin/AdminDashboard/Map
+    DashMVC->>API: GetAdminPlacesAsync(pendingOnly=false)
+    API->>AdminAPI: GET /api/admin/places [JWT AdminOnly]
+    AdminAPI->>DB: SELECT Places + Category + Images + Owner (toàn bộ, có phân trang)
+    DB-->>API: places[]
+    API-->>DashMVC: List<PlaceViewModel>
+    DashMVC-->>Admin: Bản đồ tất cả địa điểm trong hệ thống
 ```
-
----
-
-##### 13.5.2.2 Kích hoạt một session (Approve Payment)
-
-```mermaid
-sequenceDiagram
-    actor Admin
-    participant AdminUI as Admin Web
-    participant API as TourGuideAPI
-    participant AuthService
-    participant AccessSessionService
-    participant DB as Supabase / PostgreSQL
-    participant AuditLog as Audit Log
-
-    Admin->>AdminUI: Xem thông tin pending session (DeviceId, số tiền, nội dung chuyển khoản)
-    Admin->>AdminUI: Kiểm tra ngân hàng → Xác nhận đã nhận tiền
-    Admin->>AdminUI: Bấm "Approve Payment"
-    
-    AdminUI->>API: POST /api/admin/activate-session { SessionId, DeviceId, Notes }
-    API->>AuthService: Validate JWT
-    AuthService-->>API: Token valid + admin role
-    
-    API->>DB: BEGIN TRANSACTION
-    
-    API->>DB: SELECT * FROM AccessSessions WHERE SessionId = ? AND IsActive = false
-    DB-->>API: Session record
-    
-    alt Session tồn tại và chưa active
-        API->>AccessSessionService: Tính toán ExpiresAt từ PackageId
-        AccessSessionService-->>API: ExpiresAt (VD: now + 1 giờ)
-        
-        API->>DB: UPDATE AccessSessions SET IsActive = true, ActivatedAt = NOW(), ExpiresAt = ?
-        DB-->>API: Update success
-        
-        API->>AuditLog: Log { Action: "ACTIVATE_SESSION", SessionId, DeviceId, AdminId, Timestamp }
-        AuditLog-->>API: Logged
-        
-        API->>DB: COMMIT
-        API-->>AdminUI: { success: true, message: "Session activated", ExpiresAt }
-        AdminUI-->>Admin: Thông báo "Kích hoạt thành công"
-        AdminUI->>AdminUI: Xóa item khỏi danh sách pending
-        
-    else Session không tồn tại hoặc đã active
-        API->>DB: ROLLBACK
-        API-->>AdminUI: { success: false, message: "Session not found or already active" }
-        AdminUI-->>Admin: Hiển thị lỗi
-    end
-```
-
----
-
-##### 13.5.2.3 Xem danh sách thiết bị đang online
-
-```mermaid
-sequenceDiagram
-    actor Admin
-    participant AdminUI as Admin Web
-    participant API as TourGuideAPI
-    participant DB as Supabase / PostgreSQL
-    participant Timer as Auto Reload Timer
-
-    Admin->>AdminUI: Mở tab "Devices" (Online Devices)
-    AdminUI->>API: GET /api/admin/devices?onlineOnly=true (JWT)
-    API->>DB: SELECT dr.*, COUNT(dpv.VisitId) as VisitCount FROM DeviceRegistrations dr LEFT JOIN DevicePoiVisits dpv ON dr.DeviceId=dpv.DeviceId
-    API->>DB: WHERE LastSeenAt >= NOW() - INTERVAL 15 seconds
-    API->>DB: LEFT JOIN AccessSessions acs ON dr.DeviceId=acs.DeviceId AND acs.IsActive=true
-    DB-->>API: {total: int, onlineCount: int, items: [{DeviceId, Platform, FirstSeenAt, LastSeenAt, VisitCount, HasActiveSession}]}
-    API-->>AdminUI: Danh sách devices online + stats
-    AdminUI-->>Admin: Hiển thị bảng với columns: DeviceId, Platform, Status (badge Đang dùng), LastSeen, #Visits
-    AdminUI->>AdminUI: Header card: "X đang hoạt động / Y tổng cộng"
-    
-    Timer->>AdminUI: Trigger mỗi 15 giây
-    AdminUI->>API: Auto-refresh GET /api/admin/devices?onlineOnly=true
-    API-->>AdminUI: Dữ liệu mới
-    AdminUI->>AdminUI: Cập nhật UI mà không reload trang (soft refresh)
-    
-    Admin->>AdminUI: Chọn một device từ danh sách → Xem "Device Details"
-    AdminUI->>API: GET /api/admin/devices/{deviceId}
-    API->>DB: SELECT * FROM DeviceRegistrations WHERE DeviceId = ?
-    DB-->>API: Device record chi tiết
-    API->>DB: SELECT * FROM AccessSessions WHERE DeviceId = ? ORDER BY CreatedAt DESC LIMIT 10
-    DB-->>API: Danh sách sessions của device
-    API->>DB: SELECT * FROM DevicePoiVisits WHERE DeviceId = ? ORDER BY VisitedAt DESC LIMIT 50
-    DB-->>API: Lịch sử 50 lượt visit POI gần nhất
-    API-->>AdminUI: Device info + sessions + visit history
-    AdminUI-->>Admin: Hiển thị detail page: Device profile, Active session, POI visit history
-```
-
----
-
-##### 13.5.2.4 Xem chi tiết device (Device Info)
-
-```mermaid
-sequenceDiagram
-    actor Admin
-    participant AdminUI as Admin Web
-    participant API as TourGuideAPI
-    participant DB as Supabase / PostgreSQL
-
-    Admin->>AdminUI: Chọn một session → Xem "Device Details"
-    
-    AdminUI->>API: GET /api/admin/devices/{deviceId} (JWT)
-    API->>DB: SELECT * FROM DeviceRegistrations WHERE DeviceId = ?
-    DB-->>API: { DeviceId, FirstSeenAt, LastSeenAt, UserAgent, OS, Model, ... }
-    
-    API->>DB: SELECT * FROM AccessSessions WHERE DeviceId = ? ORDER BY CreatedAt DESC LIMIT 10
-    DB-->>API: Danh sách sessions của device
-    
-    API-->>AdminUI: Device info + session history
-    AdminUI-->>Admin: Hiển thị profile device và lịch sử sử dụng
-```
-
----
-
-##### 13.5.2.5 Export báo cáo
-
-```mermaid
-sequenceDiagram
-    actor Admin
-    participant AdminUI as Admin Web
-    participant API as TourGuideAPI
-    participant ExportService
-    participant DB as Supabase / PostgreSQL
-    participant FileService as File Storage
-
-    Admin->>AdminUI: Chọn ngày từ-đến + chọn loại báo cáo (Payment, Device, Place Usage, ...)
-    AdminUI->>API: GET /api/admin/export?type=payments&dateFrom=2026-01-01&dateTo=2026-01-31
-    API->>DB: Query dữ liệu theo filter
-    DB-->>API: Dữ liệu chi tiết
-    API->>ExportService: Tạo file Excel / CSV
-    ExportService-->>API: File stream
-    API->>FileService: Lưu file tạm (nếu cần)
-    FileService-->>API: Download URL
-    API-->>AdminUI: File stream (Content-Disposition: attachment)
-    AdminUI-->>Admin: Tải file Excel / CSV
-```
-
----
-
-##### 13.5.2.6 Audit Log — Xem lịch sử hành động
-
-```mermaid
-sequenceDiagram
-    actor Admin
-    participant AdminUI as Admin Web
-    participant API as TourGuideAPI
-    participant DB as Supabase / PostgreSQL
-
-    Admin->>AdminUI: Mở tab "Audit Log"
-    AdminUI->>API: GET /api/admin/audit-logs?page=1&limit=50
-    API->>DB: SELECT * FROM AuditLogs ORDER BY Timestamp DESC LIMIT 50
-    DB-->>API: [{ LogId, Action, AdminId, Target (PlaceId/SessionId/DeviceId), Details, Timestamp }, ...]
-    API-->>AdminUI: Audit log data
-    AdminUI-->>Admin: Hiển thị bảng: "Admin X sửa Place Y lúc Z" "Admin A kích hoạt session B lúc C" etc.
-```
-
----
 
 ---
 
@@ -1848,32 +1834,59 @@ sequenceDiagram
     DB-->>PlacesMVC: Places[]
     PlacesMVC-->>Owner: Danh sách địa điểm
 
-    Owner->>PlacesMVC: GET /Places/Create → POST /Places/Create {Name, Address, Lat, Lon, ...}
-    PlacesMVC->>API: POST /api/places
-    PlacesAPI->>DB: INSERT Place {IsApproved=false, IsActive=false}
-    PlacesMVC-->>Owner: Redirect /Places/Detail/{id}
+    Owner->>PlacesMVC: GET /Places/Create
+    PlacesMVC-->>Owner: Form tạo địa điểm mới
 
-    Owner->>PlacesMVC: POST /Places/Edit/{id} {Name, Address, ...}
-    PlacesMVC->>API: PUT /api/places/{id}
-    PlacesAPI->>DB: UPDATE Place
-    PlacesMVC-->>Owner: "Đã cập nhật"
+    Owner->>PlacesMVC: POST /Places/Create {Name, Address, Lat, Lon, Phone, ...}
+    PlacesMVC->>API: CreatePlaceAsync(vm)
+    API->>PlacesAPI: POST /api/places [JWT OwnerOnly]
+    PlacesAPI->>DB: INSERT Place {OwnerId=me, Status="Active", IsActive=true, IsApproved=false(default)}
+    Note over PlacesAPI,DB: IsApproved=false → không xuất hiện ở ToursPage mobile cho đến khi Admin duyệt
+    DB-->>PlacesAPI: Place {PlaceId}
+    PlacesAPI-->>API: 201 Created
+    PlacesMVC-->>Owner: Redirect /Places (danh sách quán của owner)
 
-    Owner->>PlacesMVC: POST /Places/AddImage/{placeId} {imageUrl, isMain}
-    PlacesMVC->>API: POST /api/places/{id}/images
-    PlacesAPI->>DB: INSERT PlaceImages
+    Owner->>PlacesMVC: GET /Places/Edit/{id} → POST /Places/Edit/{id} {Name, Phone, ...}
+    PlacesMVC->>API: UpdatePlaceAsync(id, vm)
+    API->>PlacesAPI: PUT /api/places/{id} [JWT OwnerOnly]
+    PlacesAPI->>DB: UPDATE Place {Name, Address, Phone, OpenTime, CloseTime, ...}
+    PlacesAPI-->>API: 200 OK + updated Place
+    PlacesMVC-->>Owner: "Cập nhật thành công"
+
+    Owner->>PlacesMVC: POST /Places/UpdateOpenStatus {id, openStatus}
+    PlacesMVC->>API: PUT /api/places/{id}/status ["Open"|"Closed"|"Busy"]
+    PlacesAPI->>DB: UPDATE Place SET OpenStatus = openStatus
+    Note over PlacesAPI,DB: Cache invalidated: places:detail:{id} + places:*
+    PlacesMVC-->>Owner: Redirect /Places
+
+    Owner->>PlacesMVC: POST /Places/UpdateTtsScript {id, ttsScript}
+    PlacesMVC->>API: PUT /api/places/{id}/tts [JWT OwnerOnly]
+    PlacesAPI->>DB: UPDATE Place SET tts_script = ttsScript
+    PlacesMVC-->>Owner: "Đã lưu TTS script"
+
+    Owner->>PlacesMVC: POST translate button (Edit page)
+    PlacesMVC->>API: POST /api/places/{id}/tts/translate [JWT OwnerOnly]
+    Note over PlacesAPI: Đọc ANTHROPIC_API_KEY từ config
+    PlacesAPI->>Claude: POST https://api.anthropic.com/v1/messages
+    Note over PlacesAPI,Claude: Prompt: dịch tts_script → vi / en / zh / ko / ja / fr
+    alt Claude API OK
+        Claude-->>PlacesAPI: JSON {"vi":"...","en":"...","zh":"...","ko":"...","ja":"...","fr":"..."}
+        PlacesAPI->>DB: UPDATE Places SET tts_translations = JSON_string
+        PlacesAPI-->>API: {success:true, translations}
+        PlacesMVC-->>Owner: "Đã dịch 6 ngôn ngữ"
+    else Lỗi API key / network
+        Claude-->>PlacesAPI: 401 / 429 / 500
+        PlacesAPI-->>PlacesMVC: 500 + thông báo lỗi cụ thể
+        PlacesMVC-->>Owner: Hiện lỗi (key không hợp lệ / rate limit / network)
+    end
+
+    Owner->>PlacesMVC: POST /Places/AddImage (via Edit page)
+    PlacesMVC->>API: POST /api/places/{id}/images {imageUrl, isMain} [JWT OwnerOnly]
+    alt isMain=true
+        PlacesAPI->>DB: UPDATE PlaceImages SET IsMain=false WHERE PlaceId=id
+    end
+    PlacesAPI->>DB: INSERT PlaceImages {PlaceId, ImageUrl, IsMain}
     PlacesMVC-->>Owner: Ảnh đã thêm
-
-    Owner->>PlacesMVC: POST /Places/UpdateTts/{id} {locale, script}
-    PlacesMVC->>API: PUT /api/places/{id}/tts
-    PlacesAPI->>DB: UPSERT PlaceTtsContents {PlaceId, Locale, Script}
-    PlacesMVC-->>Owner: "Đã lưu TTS"
-
-    Owner->>PlacesMVC: POST /Places/TranslateTts/{id}
-    PlacesMVC->>API: POST /api/places/{id}/tts/translate
-    PlacesAPI->>Claude: Dịch script sang vi / en / zh / ko / ja / fr
-    Claude-->>PlacesAPI: Translations[6]
-    PlacesAPI->>DB: UPSERT PlaceTtsContents × 6 locale
-    PlacesMVC-->>Owner: "Đã dịch 6 ngôn ngữ"
 ```
 
 ---
@@ -1975,55 +1988,97 @@ sequenceDiagram
 
 ---
 
-#### 13.5.6 Quản lý nội dung — Admin (UC23, UC24, UC25)
+#### 13.5.6 Quản lý địa điểm & Users — Admin (UC24, UC25)
 
 ```mermaid
 sequenceDiagram
     actor Admin
-    participant DashMVC as AdminDashboardController (MVC)
     participant PlacesMVC as AdminPlacesController (MVC)
     participant UsersMVC as AdminUsersController (MVC)
     participant API as ApiService
     participant AdminAPI as AdminController (API)
+    participant DB as AppDbContext
+
+    Note over Admin,PlacesMVC: Xem & quản lý địa điểm
+    Admin->>PlacesMVC: GET /Admin/AdminPlaces
+    PlacesMVC->>API: GetAdminPlacesAsync(pendingOnly=false)
+    API->>AdminAPI: GET /api/admin/places [JWT AdminOnly]
+    AdminAPI->>DB: SELECT Places + Category + Images (SELECT, không Include thừa)
+    DB-->>API: {total, page, pageSize, items[]}
+    API-->>PlacesMVC: List<PlaceViewModel>
+    PlacesMVC-->>Admin: Danh sách tất cả địa điểm
+
+    Admin->>PlacesMVC: GET /Admin/AdminPlaces?pendingOnly=true
+    PlacesMVC->>API: GetAdminPlacesAsync(pendingOnly=true)
+    API->>AdminAPI: GET /api/admin/places?pendingOnly=true
+    AdminAPI->>DB: SELECT Places WHERE Status = "Pending"
+    DB-->>PlacesMVC: places chờ duyệt
+    PlacesMVC-->>Admin: Danh sách địa điểm có Status="Pending"
+
+    Admin->>PlacesMVC: GET /Admin/AdminPlaces/Detail/{id}
+    PlacesMVC->>API: GetPlaceAsync(id)
+    API->>AdminAPI: GET /api/places/{id}
+    AdminAPI->>DB: SELECT Place WHERE PlaceId=id AND IsActive=true
+    DB-->>PlacesMVC: PlaceViewModel
+    PlacesMVC-->>Admin: Chi tiết địa điểm (ảnh, TTS, thông tin)
+
+    Admin->>PlacesMVC: POST /Admin/AdminPlaces/Suspend {placeId}
+    PlacesMVC->>API: SuspendPlaceAsync(id)
+    API->>AdminAPI: PUT /api/admin/places/{id}/suspend [JWT AdminOnly]
+    AdminAPI->>DB: ExecuteUpdateAsync → Status = "Suspended"
+    PlacesMVC-->>Admin: "Đã tạm khóa quán" → Redirect /Admin/AdminPlaces
+
+    Note over Admin,UsersMVC: Quản lý tài khoản người dùng
+    Admin->>UsersMVC: GET /Admin/AdminUsers?search=...&role=Owner
+    UsersMVC->>API: GetUsersAsync(search, role)
+    API->>AdminAPI: GET /api/admin/users?search=...&role=Owner [JWT AdminOnly]
+    AdminAPI->>DB: SELECT Users WHERE Name/Email CONTAINS search AND Role=role
+    DB-->>API: List<UserDto> {UserId, FullName, Email, Phone, Role, IsActive}
+    API-->>UsersMVC: users[]
+    UsersMVC-->>Admin: Danh sách tài khoản (có filter search + role)
+
+    Admin->>UsersMVC: POST /Admin/AdminUsers/ToggleLock {userId}
+    UsersMVC->>API: ToggleUserLockAsync(id)
+    API->>AdminAPI: PUT /api/admin/users/{id}/lock [JWT AdminOnly]
+    AdminAPI->>DB: user.IsActive = !user.IsActive
+    UsersMVC-->>Admin: "Đã cập nhật trạng thái tài khoản" → Redirect
+
+    Admin->>UsersMVC: POST /Admin/AdminUsers/ChangeRole {userId, role}
+    Note over UsersMVC: role ∈ ["User", "Owner", "Admin"]
+    UsersMVC->>API: ChangeUserRoleAsync(id, role)
+    API->>AdminAPI: PUT /api/admin/users/{id}/role [JWT AdminOnly]
+    AdminAPI->>DB: user.Role = role
+    UsersMVC-->>Admin: "Đã đổi quyền tài khoản" → Redirect
+```
+
+> **Lưu ý:** Tính năng "Duyệt địa điểm" (Approve) chưa được implement — không có endpoint `/api/admin/places/{id}/approve`. Quản lý Reviews (`AdminReviewsController`) đã bị disable (`[Obsolete]`). Admin hiện chỉ có thể xem và Suspend địa điểm.
+
+---
+
+#### 13.5.8 Owner Dashboard (UC17)
+
+```mermaid
+sequenceDiagram
+    actor Owner
+    participant DashMVC as DashboardController (MVC)
+    participant API as ApiService
     participant AnalyticsAPI as AnalyticsController (API)
     participant DB as AppDbContext
 
-    Admin->>DashMVC: GET /Admin/AdminDashboard
-    DashMVC->>API: GET /api/analytics/admin/stats
-    AnalyticsAPI->>DB: COUNT users/places + SUM revenue active sessions
-    AnalyticsAPI->>DB: COUNT DeviceRegistrations WHERE LastSeenAt >= UtcNow-15s
-    DB-->>DashMVC: {totalUsers, totalPlaces, totalRevenue, onlineDevices, ...}
-    DashMVC-->>Admin: Dashboard thống kê + card "Thiết bị online"
-
-    Admin->>PlacesMVC: GET /Admin/AdminPlaces?pendingOnly=true
-    PlacesMVC->>API: GET /api/admin/places?pendingOnly=true
-    AdminAPI->>DB: SELECT Places WHERE IsApproved=false
-    PlacesMVC-->>Admin: Danh sách địa điểm chờ duyệt
-
-    Admin->>PlacesMVC: POST /Admin/AdminPlaces/Approve {placeId}
-    API->>AdminAPI: PUT /api/admin/places/{id}/approve
-    AdminAPI->>DB: IsApproved=true, IsActive=true
-    PlacesMVC-->>Admin: "Đã duyệt — hiện trên app"
-
-    Admin->>PlacesMVC: POST /Admin/AdminPlaces/Suspend {placeId}
-    API->>AdminAPI: PUT /api/admin/places/{id}/suspend
-    AdminAPI->>DB: IsActive=false
-    PlacesMVC-->>Admin: "Đã suspend"
-
-    Admin->>UsersMVC: GET /Admin/AdminUsers?search=...&role=...
-    UsersMVC->>API: GET /api/admin/users (paginated)
-    AdminAPI->>DB: SELECT Users (filter search/role)
-    UsersMVC-->>Admin: Danh sách user
-
-    Admin->>UsersMVC: POST /Admin/AdminUsers/ToggleLock {userId}
-    API->>AdminAPI: PUT /api/admin/users/{id}/lock
-    AdminAPI->>DB: IsActive = !IsActive
-    UsersMVC-->>Admin: "Đã khóa / mở tài khoản"
-
-    Admin->>UsersMVC: POST /Admin/AdminUsers/ChangeRole {userId, role}
-    API->>AdminAPI: PUT /api/admin/users/{id}/role
-    AdminAPI->>DB: UPDATE Role
-    UsersMVC-->>Admin: "Đã đổi role"
+    Owner->>DashMVC: GET /Dashboard [OwnerOnly session filter]
+    alt Chưa đăng nhập
+        DashMVC-->>Owner: Redirect /Auth/Login
+    else Đã đăng nhập
+        DashMVC->>API: GetDashboardAsync()
+        API->>AnalyticsAPI: GET /api/analytics/dashboard [JWT OwnerOnly]
+        AnalyticsAPI->>DB: SELECT Places WHERE OwnerId = me\n(PlaceId, Name, Status, OpenStatus, TotalVisits, AverageRating, TotalReviews)
+        AnalyticsAPI->>DB: COUNT Reviews WHERE PlaceId IN myPlaces\nAND OwnerReply IS NULL
+        AnalyticsAPI->>DB: COUNT Promotions WHERE PlaceId IN myPlaces\nAND IsActive AND EndDate > UtcNow
+        DB-->>AnalyticsAPI: aggregated results
+        AnalyticsAPI-->>API: {TotalPlaces, ApprovedPlaces,\nTotalVisitsThisMonth=0,\nPendingReviews, ActivePromotions,\nAvgRating, Places[]}
+        API-->>DashMVC: DashboardViewModel
+        DashMVC-->>Owner: Cards thống kê + bảng địa điểm của owner\n(TotalPlaces, AvgRating, PendingReviews, ActivePromos)
+    end
 ```
 
 ---
@@ -2147,20 +2202,30 @@ flowchart TD
     I --> J([App poll nhận\nvào được giao diện chính])
 ```
 
-#### 13.6.4 Luồng duyệt địa điểm
+#### 13.6.4 Luồng Owner tạo địa điểm & Admin suspend
 
 ```mermaid
 flowchart TD
-    A([Owner tạo Place]) --> B[IsApproved=false\nIsActive=false]
-    B --> C[Admin GET /api/admin/places?pendingOnly=true]
-    C --> D{Quyết định}
-    D -->|Duyệt| E[PUT approve\nIsApproved=true\nIsActive=true]
-    D -->|Từ chối| F[PUT suspend\nIsActive=false]
-    E --> G[Place hiện trên app mobile\nMapPage + MainPage]
-    F --> H[Place bị ẩn]
-    G --> I{Owner cập nhật?}
-    I -->|Có| J[PUT /api/places/id]
-    J --> G
+    A([Owner POST /Places/Create]) --> B[INSERT Place\nStatus=Active, IsActive=true\nIsApproved=false]
+    B --> C[Place hiện ngay trên MapPage + MainPage\nNhưng KHÔNG xuất hiện ở ToursPage\nvì ToursPage lọc IsApproved=true]
+
+    C --> D{Admin cần kiểm tra?}
+    D -->|GET /Admin/AdminPlaces| E[Xem danh sách địa điểm\ncó thể lọc theo Status]
+    E --> F{Quyết định suspend?}
+    F -->|POST /Admin/AdminPlaces/Suspend| G[PUT /api/admin/places/id/suspend\nExecuteUpdate → Status=Suspended]
+    G --> H[Place bị ẩn\nKhông còn hiện trên mobile]
+    F -->|Không hành động| I[Place vẫn Active]
+
+    D -->|Không xem| I
+    I --> J{Owner cập nhật thông tin?}
+    J -->|PUT /Places/Edit| K[PUT /api/places/id\ncập nhật Name, Address, Phone, ...]
+    J -->|POST /Places/UpdateOpenStatus| L[PUT /api/places/id/status\nOpen / Closed / Busy]
+    J -->|POST /Places/UpdateTtsScript| M[PUT /api/places/id/tts\ncập nhật tts_script]
+    K --> I
+    L --> I
+    M --> I
+
+    Note1[Lưu ý: Chức năng Approve\nchưa implement — không có\n endpoint /approve.\nIsApproved mặc định false\nvà không được set lên true\nqua web hiện tại.]
 ```
 
 #### 13.6.5 Luồng đăng nhập Web MVC

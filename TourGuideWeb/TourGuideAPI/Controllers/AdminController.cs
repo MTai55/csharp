@@ -13,16 +13,7 @@ namespace TourGuideAPI.Controllers;
 public class AdminController(AppDbContext db, ILogger<AdminController> logger) : ControllerBase
 {
     // ── Users ────────────────────────────────────────────────────
-    [HttpGet("test")]
-    [AllowAnonymous]
-    public IActionResult TestEndpoint()
-    {
-        logger.LogInformation("Test endpoint called");
-        return Ok(new { message = "API is working" });
-    }
-
     [HttpGet("users")]
-    [AllowAnonymous]
     public async Task<IActionResult> GetUsers([FromQuery] string? search, [FromQuery] string? role)
     {
         try
@@ -104,19 +95,15 @@ public class AdminController(AppDbContext db, ILogger<AdminController> logger) :
     {
         logger.LogInformation($"📍 GetAdminPlaces called - pendingOnly: {pendingOnly}, page: {page}");
         
-        // FIX: Build entire query chain without intermediate reassignments
         var query = db.Places
-            .Include(p => p.Owner)
-            .Include(p => p.Category)
-            .Include(p => p.Images)
-            .Where(p => !pendingOnly || p.Status == "Pending")  // Use || instead of separate if
+            .Where(p => !pendingOnly || p.Status == "Pending")
             .OrderByDescending(p => p.CreatedAt);
-        
+
         if (pendingOnly)
             logger.LogInformation($"🔄 Filtering to pending only");
-        
+
         var total = await query.CountAsync();
-        
+
         var result = await query
             .Skip((page - 1) * pageSize).Take(pageSize)
             .Select(p => new
@@ -134,8 +121,8 @@ public class AdminController(AppDbContext db, ILogger<AdminController> logger) :
                 p.TotalReviews,
                 p.TotalVisits,
                 CategoryId = p.CategoryId,
-                CategoryName = p.Category!.Name,
-                MainImageUrl = p.Images.Where(i => i.IsMain).FirstOrDefault()!.ImageUrl,
+                CategoryName = p.Category != null ? p.Category.Name : null,
+                MainImageUrl = p.Images.Where(i => i.IsMain).Select(i => i.ImageUrl).FirstOrDefault(),
                 p.IsApproved,
                 p.Specialty,
                 p.PricePerPerson,
@@ -146,7 +133,7 @@ public class AdminController(AppDbContext db, ILogger<AdminController> logger) :
                 p.HasAircon,
                 p.Status,
                 p.OpenStatus,
-                OwnerName = p.Owner!.FullName
+                OwnerName = p.Owner != null ? p.Owner.FullName : null
             })
             .ToListAsync();
         
