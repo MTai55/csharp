@@ -2391,3 +2391,119 @@ graph LR
 **Nhóm phát triển:** Sinh viên đồ án  
 **Cập nhật lần cuối:** Tháng 4, 2026  
 **Phiên bản:** 2.5 — Cập nhật: heartbeat 5s online monitoring, GeofenceEngine sort PlaceId tiebreaker, OnSleep/OnResume lifecycle, web admin badge Đang dùng + auto-reload 15s, counter thiết bị online trang Devices, card Thiết bị online Dashboard
+
+---
+
+## 14. Sequence Diagrams - Testing & Simulation
+
+> Cac sequence nay mo ta nhom test can thiet cho do an: geofence simulator, multi-device contention, replay theo seed, va load test runner.
+
+### 14.1 Geofence Simulator - Run Scenario
+
+```mermaid
+sequenceDiagram
+    actor Tester as Tester/Admin
+    participant SimPage as MapPage / Geofence Simulator
+    participant Scenario as ScenarioConfig
+    participant Engine as SimEngine
+    participant Device as SimDevice[]
+    participant GE as GeofenceEngine
+    participant NS as NarrationService
+    participant Log as ClientLog
+
+    Tester->>SimPage: Choose scenario + seed
+    Tester->>SimPage: Click "Run Scenario"
+    SimPage->>Scenario: Apply preset (cluster, step, interval, duration)
+    SimPage->>Engine: Init devices + lock seed
+    Engine->>Device: Spawn DEV-1..N around target cluster
+    Engine->>Log: Write "scenario start"
+
+    loop Every interval
+        Engine->>Device: Move toward current target
+        Device->>GE: Check current POI + cooldown + debounce
+        alt Enter geofence
+            GE-->>Device: nearest POI
+            Device->>NS: SpeakAsync(script)
+            Device->>Log: Write enter / api / cooldown events
+            Device->>Engine: Update stats (enters, API, latency)
+        else No enter yet
+            GE-->>Device: null
+        end
+    end
+
+    Engine->>Engine: Evaluate checks
+    Engine-->>SimPage: PASS / FAIL + score
+    SimPage->>Log: Write summary
+    Tester->>SimPage: Export JSON
+    SimPage-->>Tester: Session file (seed, events, checks, devices)
+```
+
+### 14.2 Multi-device Contention
+
+```mermaid
+sequenceDiagram
+    actor Tester as Tester/Admin
+    participant SimPage as MapPage / Geofence Simulator
+    participant Engine as SimEngine
+    participant D1 as DEV-1
+    participant D2 as DEV-2
+    participant D3 as DEV-3
+    participant GE as GeofenceEngine
+    participant Log as ClientLog
+
+    Tester->>SimPage: Select "3 Device Contention"
+    Tester->>SimPage: Run Scenario
+    SimPage->>Engine: Init 3 devices + converge first
+    Engine->>Log: Write "converge all devices"
+
+    loop Tick 1..N
+        Engine->>D1: Move
+        Engine->>D2: Move
+        Engine->>D3: Move
+
+        par Device 1
+            D1->>GE: Find nearest POI
+            GE-->>D1: POI or null
+            D1->>Log: enter/cooldown/api event
+        and Device 2
+            D2->>GE: Find nearest POI
+            GE-->>D2: POI or null
+            D2->>Log: enter/cooldown/api event
+        and Device 3
+            D3->>GE: Find nearest POI
+            GE-->>D3: POI or null
+            D3->>Log: enter/cooldown/api event
+        end
+    end
+
+    Engine->>Engine: Aggregate queue, enters, cooldownHits, avgLatency
+    Engine-->>SimPage: Summary + score + checks
+```
+
+### 14.3 Load Test Runner
+
+```mermaid
+sequenceDiagram
+    actor Tester as Tester/Admin
+    participant Page as LoadTest/Index
+    participant Ctrl as LoadTestController
+    participant K6 as k6 script
+    participant API as Public API
+    participant Stream as SSE output
+
+    Tester->>Page: Pick scenario + base URL
+    Tester->>Page: Click "Run test"
+    Page->>Ctrl: GET /LoadTest/Run?file=...&baseUrl=...
+    Ctrl->>K6: Start process with selected script
+
+    loop While k6 is running
+        K6->>API: Send requests
+        API-->>K6: Response / status
+        K6->>Ctrl: stdout line
+        Ctrl-->>Stream: data: log line
+        Stream-->>Page: Append log line
+    end
+
+    Ctrl-->>Page: Process finished
+    Page-->>Tester: Show completion status + output log
+```

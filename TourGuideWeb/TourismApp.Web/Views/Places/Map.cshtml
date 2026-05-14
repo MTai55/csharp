@@ -18,6 +18,99 @@
   .user-dot { width:18px; height:18px; background:#3b82f6; border:3px solid white; border-radius:50%; box-shadow:0 0 0 4px rgba(59,130,246,0.3); }
   .user-dot-outer { width:60px; height:60px; background:rgba(59,130,246,0.15); border:2px solid rgba(59,130,246,0.4); border-radius:50%; display:flex;align-items:center;justify-content:center; animation:ripple 2s infinite; }
   @@keyframes ripple { 0%{box-shadow:0 0 0 0 rgba(59,130,246,0.3)} 70%{box-shadow:0 0 0 20px rgba(59,130,246,0)} 100%{box-shadow:0 0 0 0 rgba(59,130,246,0)} }
+  
+  @@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  .animate-spin { animation: spin 1s linear infinite; }
+  .sim-panel {
+    border: 1px solid rgba(200, 169, 110, 0.18);
+    background:
+      radial-gradient(circle at top right, rgba(233, 69, 96, 0.12), transparent 28%),
+      linear-gradient(180deg, #1a1410 0%, #120e0b 100%);
+    color: #f0e6d3;
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.32);
+  }
+  .sim-panel .panel-surface {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .sim-panel .panel-label {
+    color: #c8a96e;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+  }
+  .sim-terminal {
+    background: #0a0f0c;
+    border: 1px solid rgba(76, 175, 80, 0.18);
+    color: #8bf5a5;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  .sim-terminal-line {
+    padding: 0.125rem 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .sim-device-row {
+    cursor: pointer;
+    transition: background-color 0.15s ease, transform 0.15s ease;
+  }
+  .sim-device-row:hover {
+    background: rgba(255, 255, 255, 0.03);
+  }
+  .sim-device-row.active {
+    background: rgba(200, 169, 110, 0.1);
+    outline: 1px solid rgba(200, 169, 110, 0.18);
+  }
+  .sim-mini-btn {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.03);
+    color: #f0e6d3;
+    transition: all 0.15s ease;
+  }
+  .sim-mini-btn:hover {
+    background: rgba(200, 169, 110, 0.14);
+    border-color: rgba(200, 169, 110, 0.28);
+  }
+  .sim-mini-btn.primary {
+    background: linear-gradient(135deg, #954400, #fc8127);
+    color: white;
+    border-color: transparent;
+  }
+  .sim-mini-btn.primary:hover {
+    filter: brightness(1.05);
+  }
+  .sim-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border-radius: 999px;
+    padding: 0.25rem 0.6rem;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+  }
+  .runner-dock {
+    position: fixed;
+    top: 88px;
+    right: 18px;
+    width: min(460px, calc(100vw - 24px));
+    max-height: calc(100vh - 110px);
+    z-index: 4100;
+    overflow: hidden;
+    border-radius: 24px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.38);
+    backdrop-filter: blur(18px);
+  }
+  .runner-dock .runner-body {
+    max-height: calc(100vh - 170px);
+    overflow: auto;
+  }
+  .sim-score-ring {
+    background:
+      radial-gradient(circle at center, rgba(200, 169, 110, 0.22) 0%, rgba(200, 169, 110, 0.08) 42%, transparent 43%),
+      rgba(255, 255, 255, 0.03);
+  }
 </style>
 
 <div class="flex items-center justify-between mb-5 pt-2">
@@ -69,6 +162,221 @@
   <span id="locate-status-text">Đang định vị...</span>
   <button onclick="clearLocation()" class="ml-auto text-blue-400 hover:text-blue-600 text-xs font-bold">Xóa</button>
 </div>
+
+@if (isAdmin)
+{
+  <div id="sim-panel" class="sim-panel mb-4 rounded-3xl overflow-hidden">
+    <div class="flex items-center justify-between border-b border-white/5 px-5 py-4">
+      <div class="flex items-center gap-3">
+        <span class="material-symbols-outlined text-[#c8a96e]">radar</span>
+        <div>
+          <h3 class="text-sm font-black uppercase tracking-[0.22em] text-[#f0e6d3]">Geofence Simulator</h3>
+          <p class="text-xs text-[#8d7a66] mt-0.5">Auto walk, manual move, log runner va device stats ngay tren map</p>
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="sim-chip bg-emerald-500/10 text-emerald-300"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>Client log</span>
+        <span class="sim-chip bg-cyan-500/10 text-cyan-300"><span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>Automation test</span>
+        <span class="sim-chip bg-rose-500/10 text-rose-300"><span class="w-1.5 h-1.5 rounded-full bg-rose-400"></span>Map overlay</span>
+      </div>
+    </div>
+
+    <div class="grid gap-4 p-5 xl:grid-cols-[340px_1fr]">
+      <div class="space-y-4">
+        <div class="panel-surface rounded-2xl p-4">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <div class="panel-label">Auto Walk</div>
+              <p class="text-xs text-[#9b8b75] mt-1">Buoc, chu ky va preset cluster</p>
+            </div>
+            <button id="sim-toggle-btn" onclick="toggleSimWalk()" class="sim-mini-btn primary rounded-xl px-4 py-2 text-xs font-bold">Start Walk</button>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <label class="space-y-1">
+              <span class="text-[11px] font-bold text-[#c8a96e]">Buoc (m)</span>
+              <input id="sim-step" type="number" min="1" value="18" class="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-[#f0e6d3] outline-none focus:border-[#c8a96e]" />
+            </label>
+            <label class="space-y-1">
+              <span class="text-[11px] font-bold text-[#c8a96e]">Interval (ms)</span>
+              <input id="sim-interval" type="number" min="100" step="50" value="400" class="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-[#f0e6d3] outline-none focus:border-[#c8a96e]" />
+            </label>
+          </div>
+
+          <div class="mt-3 space-y-1">
+            <label class="text-[11px] font-bold text-[#c8a96e]">Cluster preset</label>
+            <select id="sim-cluster" class="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-[#f0e6d3] outline-none focus:border-[#c8a96e]">
+              <option value="top3">Top 3 places</option>
+              <option value="top4" selected>Cluster 4</option>
+              <option value="top5">Cluster 5</option>
+              <option value="all">All active places</option>
+            </select>
+          </div>
+
+          <div class="mt-4 flex flex-wrap gap-2">
+            <button onclick="convergeSimDevices()" class="sim-mini-btn rounded-xl px-3 py-2 text-xs font-bold">Converge</button>
+            <button onclick="stopSimWalk()" class="sim-mini-btn rounded-xl px-3 py-2 text-xs font-bold">Stop</button>
+            <button onclick="resetSimState()" class="sim-mini-btn rounded-xl px-3 py-2 text-xs font-bold">Reset</button>
+          </div>
+        </div>
+
+        <div class="panel-surface rounded-2xl p-4">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <div class="panel-label">Test Scenarios</div>
+              <p class="text-xs text-[#9b8b75] mt-1">Chay bai test co PASS/FAIL, score, seed va replay</p>
+            </div>
+            <span id="sim-scenario-badge" class="sim-chip bg-white/5 text-[#f0e6d3]">IDLE</span>
+          </div>
+          <select id="sim-scenario-select" onchange="updateScenarioDescription(this.value)" class="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-[#f0e6d3] outline-none focus:border-[#c8a96e]"></select>
+          <p id="sim-scenario-desc" class="mt-2 text-[11px] leading-5 text-[#8d7a66]">Chon scenario de xem mo ta.</p>
+          <div class="mt-3 grid grid-cols-[1fr_auto] gap-2">
+            <label class="space-y-1">
+              <span class="text-[11px] font-bold text-[#c8a96e]">Seed</span>
+              <input id="sim-seed" type="number" min="1" step="1" value="101" class="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-[#f0e6d3] outline-none focus:border-[#c8a96e]" />
+            </label>
+            <div class="flex items-end">
+              <button onclick="replaySelectedScenario()" class="sim-mini-btn rounded-xl px-3 py-2 text-xs font-bold">Replay seed</button>
+            </div>
+          </div>
+          <div class="mt-3 flex flex-wrap gap-2">
+            <button onclick="runSelectedScenario()" class="sim-mini-btn primary rounded-xl px-3 py-2 text-xs font-bold">Run Scenario</button>
+            <button onclick="stopScenarioTest(true)" class="sim-mini-btn rounded-xl px-3 py-2 text-xs font-bold">Stop</button>
+            <button onclick="exportSimSessionJson()" class="sim-mini-btn rounded-xl px-3 py-2 text-xs font-bold">Export JSON</button>
+          </div>
+        </div>
+
+        <div class="panel-surface rounded-2xl p-4">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <div class="panel-label">Manual</div>
+              <p class="text-xs text-[#9b8b75] mt-1">Di chuyen thiet bi dang chon va doi dich den</p>
+            </div>
+            <span id="sim-selected-label" class="text-xs font-bold text-[#f0e6d3]">DEV-1</span>
+          </div>
+          <div class="space-y-2 mb-3">
+            <label class="text-[11px] font-bold text-[#c8a96e]">Đích đến</label>
+            <select id="sim-target-select" onchange="setSelectedDeviceTarget(this.value)" class="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-[#f0e6d3] outline-none focus:border-[#c8a96e]"></select>
+            <p class="text-[11px] text-[#8d7a66]">Chọn POI để device đang chọn sẽ đi tới. Nếu đổi cluster preset thì danh sách này sẽ cập nhật theo preset mới.</p>
+          </div>
+          <div class="grid grid-cols-3 gap-2">
+            <div></div>
+            <button onclick="nudgeSelectedDevice(0, 1)" class="sim-mini-btn rounded-xl py-3 text-sm font-bold">↑</button>
+            <div></div>
+            <button onclick="nudgeSelectedDevice(-1, 0)" class="sim-mini-btn rounded-xl py-3 text-sm font-bold">←</button>
+            <button onclick="nudgeSelectedDevice(0, 0)" class="sim-mini-btn rounded-xl py-3 text-sm font-bold">•</button>
+            <button onclick="nudgeSelectedDevice(1, 0)" class="sim-mini-btn rounded-xl py-3 text-sm font-bold">→</button>
+            <div></div>
+            <button onclick="nudgeSelectedDevice(0, -1)" class="sim-mini-btn rounded-xl py-3 text-sm font-bold">↓</button>
+            <div></div>
+          </div>
+          <p class="mt-3 text-[11px] leading-5 text-[#8d7a66]">Mui ten dung de day device dang chon tren map. Nut giua giu vi tri va kiem tra geofence ngay.</p>
+        </div>
+
+        <div class="panel-surface rounded-2xl p-4">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <div class="panel-label">Log File</div>
+              <p class="text-xs text-[#9b8b75] mt-1">Luu, tai xuong hoac xem log hien tai</p>
+            </div>
+            <button onclick="clearSimLog()" class="text-xs font-bold text-[#9b8b75] hover:text-white">Clear</button>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button onclick="saveSimLog()" class="sim-mini-btn rounded-xl px-3 py-2 text-xs font-bold">Save</button>
+            <button onclick="downloadSimLog()" class="sim-mini-btn rounded-xl px-3 py-2 text-xs font-bold">Download</button>
+            <button onclick="toggleSimLogViewer()" class="sim-mini-btn rounded-xl px-3 py-2 text-xs font-bold">View</button>
+          </div>
+          <p class="mt-3 text-[11px] leading-5 text-[#8d7a66]">Log duoc luu vao localStorage va co the xuat ra file .log de gan vao test report.</p>
+        </div>
+      </div>
+
+      <div class="space-y-4">
+        <div class="panel-surface rounded-2xl p-4">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <div class="panel-label">Device Stats</div>
+              <p class="text-xs text-[#9b8b75] mt-1">Queue, enters, cooldown, API, latency va current POI</p>
+            </div>
+            <div class="flex items-center gap-2 text-xs font-bold text-[#8d7a66]">
+              <span class="sim-chip bg-white/5 text-[#f0e6d3]"><span class="w-1.5 h-1.5 rounded-full bg-blue-400"></span><span id="sim-device-count">3</span> devices</span>
+              <span class="sim-chip bg-white/5 text-[#f0e6d3]"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span><span id="sim-enter-count">0</span> enters</span>
+            </div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-left text-xs">
+              <thead class="text-[#c8a96e]">
+                <tr class="border-b border-white/10">
+                  <th class="px-3 py-2 font-bold uppercase tracking-[0.18em]">Device</th>
+                  <th class="px-3 py-2 font-bold uppercase tracking-[0.18em]">Queue</th>
+                  <th class="px-3 py-2 font-bold uppercase tracking-[0.18em]">Enters</th>
+                  <th class="px-3 py-2 font-bold uppercase tracking-[0.18em]">Cooldown</th>
+                  <th class="px-3 py-2 font-bold uppercase tracking-[0.18em]">API✓</th>
+                  <th class="px-3 py-2 font-bold uppercase tracking-[0.18em]">API×</th>
+                  <th class="px-3 py-2 font-bold uppercase tracking-[0.18em]">Avg ms</th>
+                  <th class="px-3 py-2 font-bold uppercase tracking-[0.18em]">POI hien tai</th>
+                  <th class="px-3 py-2 font-bold uppercase tracking-[0.18em]">Dang den</th>
+                </tr>
+              </thead>
+              <tbody id="sim-device-table" class="text-[#f0e6d3]"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel-surface rounded-2xl p-4">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <div class="panel-label">Client Log</div>
+              <p class="text-xs text-[#9b8b75] mt-1">Geofence + narration queue</p>
+            </div>
+            <span id="sim-log-badge" class="hidden sim-chip bg-emerald-500/10 text-emerald-300">RUNNING</span>
+          </div>
+          <div id="sim-log" class="sim-terminal h-64 overflow-y-auto rounded-2xl px-4 py-3 text-xs leading-5"></div>
+        </div>
+
+        <div class="panel-surface rounded-2xl p-4">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <div class="panel-label">Summary</div>
+              <p class="text-xs text-[#9b8b75] mt-1">Ket qua luan bai test, co rubric de cham diem</p>
+            </div>
+            <span id="sim-summary-badge" class="sim-chip bg-white/5 text-[#f0e6d3]">NO RUN</span>
+          </div>
+          <div id="sim-summary-scenario" class="mb-3 text-xs font-semibold text-[#f0e6d3]">Scenario: —</div>
+          <div class="grid grid-cols-3 gap-2 text-xs">
+            <div class="rounded-xl bg-black/20 px-3 py-2 sim-score-ring">
+              <div class="text-[#8d7a66]">Score</div>
+              <div id="sim-summary-score" class="mt-1 font-black text-[#f0e6d3] text-lg">—</div>
+            </div>
+            <div class="rounded-xl bg-black/20 px-3 py-2">
+              <div class="text-[#8d7a66]">Duration</div>
+              <div id="sim-summary-duration" class="mt-1 font-bold text-[#f0e6d3]">—</div>
+            </div>
+            <div class="rounded-xl bg-black/20 px-3 py-2">
+              <div class="text-[#8d7a66]">Enters</div>
+              <div id="sim-summary-enters" class="mt-1 font-bold text-[#f0e6d3]">—</div>
+            </div>
+            <div class="rounded-xl bg-black/20 px-3 py-2">
+              <div class="text-[#8d7a66]">API</div>
+              <div id="sim-summary-api" class="mt-1 font-bold text-[#f0e6d3]">—</div>
+            </div>
+            <div class="rounded-xl bg-black/20 px-3 py-2">
+              <div class="text-[#8d7a66]">Avg ms</div>
+              <div id="sim-summary-avg" class="mt-1 font-bold text-[#f0e6d3]">—</div>
+            </div>
+            <div class="rounded-xl bg-black/20 px-3 py-2">
+              <div class="text-[#8d7a66]">Seed</div>
+              <div id="sim-summary-seed" class="mt-1 font-bold text-[#f0e6d3]">—</div>
+            </div>
+          </div>
+          <div class="mt-3 space-y-2">
+            <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-[#c8a96e]">Checks</div>
+            <div id="sim-summary-checks" class="space-y-2 text-xs"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+}
 
 <div class="relative grid grid-cols-1 lg:grid-cols-3 gap-5">
   <!-- Map -->
@@ -265,6 +573,7 @@
 const isAdmin  = @(isAdmin ? "true" : "false");
 const API_BASE = 'http://localhost:5010';
 const jwt      = '@Html.Raw(Context.Session.GetString("JwtToken") ?? "")';
+const simEnabled = isAdmin;
 
 const places = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Select(p => new {
   placeId       = p.PlaceId, name = p.Name, address = p.Address,
@@ -275,6 +584,7 @@ const places = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Select(
   pricePerPerson= p.PricePerPerson, ownerName = p.OwnerName,
   openTime      = p.OpenTime, closeTime = p.CloseTime,
   mainImageUrl  = p.MainImageUrl, phone = p.Phone,
+  radius        = p.Radius,
 })));
 
 // ── Map ───────────────────────────────────────────────────────
@@ -516,6 +826,1115 @@ function openDirections(lat, lng) {
 }
 
 // ── Markers ───────────────────────────────────────────────────
+// â”€â”€ Geofence Simulator â”€â”€â€¦
+const simState = {
+  running: false,
+  timer: null,
+  selectedDeviceId: 'DEV-1',
+  devices: [],
+  markers: [],
+  circles: [],
+  routes: [],
+  log: [],
+  events: [],
+  logKey: 'tourguide.simulator.log.v1',
+  totalEnters: 0,
+  currentClusterKey: '',
+  activeScenario: null,
+  scenarioTimer: null,
+  seed: 101,
+  rng: Math.random,
+  test: {
+    scenarioId: null,
+    name: null,
+    status: 'IDLE',
+    startedAt: null,
+    endedAt: null,
+    seed: null,
+    checks: [],
+    resultText: 'NO RUN',
+    score: 0,
+    metrics: {
+      apiOk: 0,
+      apiFail: 0,
+      cooldownHits: 0,
+      targetChanges: 0,
+      manualMoves: 0,
+      uniqueDeviceIds: 0,
+      avgLatencyMs: 0,
+      totalEvents: 0,
+      cycleHits: 0,
+      deterministicHits: 0
+    }
+  },
+};
+
+const simPalette = ['#22c55e', '#3b82f6', '#f59e0b', '#e94560', '#a855f7'];
+
+const simScenarios = [
+  {
+    id: 'single-enter',
+    name: 'Enter POI',
+    desc: '1 device đi vào 1 POI, kiểm tra enter + API + log cơ bản.',
+    deviceCount: 1,
+    cluster: 'top3',
+    step: 16,
+    interval: 350,
+    durationMs: 15000,
+    holdTarget: true,
+    autoStartWalk: true,
+    seed: 101,
+    setup: (state) => {
+      const device = state.devices[0];
+      if (device) device.targetIndex = 0;
+    },
+    evaluate: (state) => {
+      const checks = [];
+      checks.push(makeCheck('Có ít nhất 1 enter', state.totalEnters >= 1, state.totalEnters, '>= 1'));
+      checks.push(makeCheck('Có API success', state.test.metrics.apiOk >= 1, state.test.metrics.apiOk, '>= 1'));
+      checks.push(makeCheck('Không fail quá 2 lần', state.test.metrics.apiFail <= 2, state.test.metrics.apiFail, '<= 2'));
+      return checks;
+    }
+  },
+  {
+    id: 'cooldown-guard',
+    name: 'Cooldown Guard',
+    desc: 'Giữ device trong vùng để xác nhận cooldown chặn enter lặp.',
+    deviceCount: 1,
+    cluster: 'top3',
+    step: 4,
+    interval: 300,
+    durationMs: 18000,
+    holdTarget: true,
+    autoStartWalk: true,
+    cooldownMinutes: 0.08,
+    seed: 202,
+    setup: (state) => {
+      const device = state.devices[0];
+      if (device) device.targetIndex = 0;
+    },
+    evaluate: (state) => {
+      const checks = [];
+      checks.push(makeCheck('Có enter ban đầu', state.totalEnters >= 1, state.totalEnters, '>= 1'));
+      checks.push(makeCheck('Cooldown có tác dụng', state.test.metrics.cooldownHits >= 1, state.test.metrics.cooldownHits, '>= 1'));
+      checks.push(makeCheck('Không enter quá 1 lần', state.totalEnters <= 1, state.totalEnters, '<= 1'));
+      return checks;
+    }
+  },
+  {
+    id: 'contention',
+    name: '3 Device Contention',
+    desc: '3 device cùng tranh một cụm POI để xem queue, enters và latency.',
+    deviceCount: 3,
+    cluster: 'top4',
+    step: 14,
+    interval: 400,
+    durationMs: 20000,
+    holdTarget: false,
+    convergeFirst: true,
+    autoStartWalk: true,
+    seed: 303,
+    setup: () => {},
+    evaluate: (state) => {
+      const checks = [];
+      checks.push(makeCheck('Ít nhất 3 enters', state.totalEnters >= 3, state.totalEnters, '>= 3'));
+      checks.push(makeCheck('Ít nhất 2 device tham gia', state.test.metrics.uniqueDeviceIds >= 2, state.test.metrics.uniqueDeviceIds, '>= 2'));
+      checks.push(makeCheck('Latency trung bình hợp lý', state.test.metrics.avgLatencyMs > 0 && state.test.metrics.avgLatencyMs < 2000, fmtMs(state.test.metrics.avgLatencyMs), '< 2000ms'));
+      return checks;
+    }
+  },
+  {
+    id: 'manual-target-switch',
+    name: 'Manual Target Switch',
+    desc: 'Đổi đích đến bằng dropdown rồi chạy walk để kiểm tra thay đổi target.',
+    deviceCount: 1,
+    cluster: 'all',
+    step: 12,
+    interval: 350,
+    durationMs: 15000,
+    holdTarget: false,
+    autoStartWalk: false,
+    requiresManualTargetChange: true,
+    seed: 404,
+    setup: (state) => {
+      const device = state.devices[0];
+      if (device) device.targetIndex = 0;
+    },
+    evaluate: (state) => {
+      const checks = [];
+      checks.push(makeCheck('Có đổi target ít nhất 1 lần', state.test.metrics.targetChanges >= 1, state.test.metrics.targetChanges, '>= 1'));
+      checks.push(makeCheck('Có enter sau khi đổi target', state.totalEnters >= 1, state.totalEnters, '>= 1'));
+      return checks;
+    }
+  },
+  {
+    id: 'reenter-after-cooldown',
+    name: 'Re-enter After Cooldown',
+    desc: '1 device đứng trong vùng đủ lâu để enter lại sau khi cooldown hết hạn.',
+    deviceCount: 1,
+    cluster: 'top3',
+    step: 3,
+    interval: 280,
+    durationMs: 26000,
+    holdTarget: true,
+    autoStartWalk: true,
+    cooldownMinutes: 0.08,
+    seed: 505,
+    setup: (state) => {
+      const device = state.devices[0];
+      if (device) device.targetIndex = 0;
+    },
+    evaluate: (state) => {
+      const checks = [];
+      checks.push(makeCheck('Enter ít nhất 2 lần', state.totalEnters >= 2, state.totalEnters, '>= 2'));
+      checks.push(makeCheck('Cooldown đã chặn re-enter', state.test.metrics.cooldownHits >= 1, state.test.metrics.cooldownHits, '>= 1'));
+      checks.push(makeCheck('API ổn định khi re-enter', state.test.metrics.apiOk >= 2 && state.test.metrics.apiFail === 0, `${state.test.metrics.apiOk}✓ / ${state.test.metrics.apiFail}✕`, 'API fail = 0'));
+      return checks;
+    }
+  },
+  {
+    id: 'dual-device-same-poi',
+    name: '2 Device Same POI',
+    desc: '2 device cùng target một POI để kiểm tra contention, queue và API log.',
+    deviceCount: 2,
+    cluster: 'top4',
+    step: 12,
+    interval: 360,
+    durationMs: 18000,
+    holdTarget: false,
+    convergeFirst: true,
+    autoStartWalk: true,
+    cooldownMinutes: 0.08,
+    seed: 606,
+    setup: () => {},
+    evaluate: (state) => {
+      const checks = [];
+      checks.push(makeCheck('Ít nhất 2 enters', state.totalEnters >= 2, state.totalEnters, '>= 2'));
+      checks.push(makeCheck('Có 2 device tham gia', state.test.metrics.uniqueDeviceIds >= 2, state.test.metrics.uniqueDeviceIds, '>= 2'));
+      checks.push(makeCheck('Có queue hoặc cooldown', (state.test.metrics.cooldownHits + state.devices.reduce((s, d) => s + (d.queue || 0), 0)) >= 1, state.test.metrics.cooldownHits, '>= 1 signal'));
+      return checks;
+    }
+  },
+  {
+    id: 'manual-escape-reenter',
+    name: 'Manual Escape/Re-enter',
+    desc: 'Người test tự đẩy device ra khỏi vùng rồi kéo quay lại để xác nhận geofence reset đúng.',
+    deviceCount: 1,
+    cluster: 'top3',
+    step: 8,
+    interval: 400,
+    durationMs: 22000,
+    holdTarget: true,
+    autoStartWalk: false,
+    seed: 707,
+    setup: (state) => {
+      const device = state.devices[0];
+      if (device) device.targetIndex = 0;
+    },
+    evaluate: (state) => {
+      const checks = [];
+      checks.push(makeCheck('Có thao tác manual', state.test.metrics.manualMoves >= 2, state.test.metrics.manualMoves, '>= 2'));
+      checks.push(makeCheck('Có enter sau khi quay lại', state.totalEnters >= 1, state.totalEnters, '>= 1'));
+      checks.push(makeCheck('Log đủ dày', state.test.metrics.totalEvents >= 4, state.test.metrics.totalEvents, '>= 4'));
+      return checks;
+    }
+  }
+];
+
+function getSimTargets() {
+  const active = places
+    .filter(p => p.latitude && p.longitude)
+    .slice()
+    .sort((a, b) => (b.averageRating - a.averageRating) || (b.totalVisits - a.totalVisits) || (a.placeId - b.placeId));
+
+  const mode = document.getElementById('sim-cluster')?.value || 'top4';
+  if (mode === 'all') return active;
+  const count = mode === 'top3' ? 3 : mode === 'top5' ? 5 : 4;
+  return active.slice(0, Math.min(count, active.length));
+}
+
+function formatSimClock(date = new Date()) {
+  return date.toLocaleTimeString([], { hour12: false });
+}
+
+function addSimLog(message, kind = 'info') {
+  const entry = { at: formatSimClock(), message, kind };
+  simState.log.push(entry);
+  if (simState.log.length > 800) simState.log.shift();
+  localStorage.setItem(simState.logKey, JSON.stringify(simState.log));
+  renderSimLog();
+}
+
+function trackSimEvent(type, payload = {}) {
+  const evt = {
+    type,
+    at: Date.now(),
+    ...payload
+  };
+  simState.events.push(evt);
+  if (simState.events.length > 1000) simState.events.shift();
+  simState.test.metrics.totalEvents = simState.events.length;
+}
+
+function loadSimLog() {
+  try {
+    const raw = localStorage.getItem(simState.logKey);
+    simState.log = raw ? JSON.parse(raw) : [];
+  } catch {
+    simState.log = [];
+  }
+}
+
+function renderSimLog() {
+  const box = document.getElementById('sim-log');
+  if (!box) return;
+  if (!simState.log.length) {
+    box.innerHTML = '<div class="text-[#5f7c64]">[SIM] Geofence simulator ready.</div>';
+    return;
+  }
+  box.innerHTML = simState.log.map(x => {
+    const color = x.kind === 'error' ? 'text-red-300' : x.kind === 'success' ? 'text-emerald-300' : x.kind === 'meta' ? 'text-cyan-300' : 'text-[#8bf5a5]';
+    return `<div class="sim-terminal-line ${color}"><span class="text-[#5f7c64]">${x.at}</span> | [SIM] ${escapeHtml(x.message)}</div>`;
+  }).join('');
+  box.scrollTop = box.scrollHeight;
+}
+
+function escapeHtml(text) {
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function fmtMs(value) {
+  if (value == null || Number.isNaN(value)) return '—';
+  return `${Math.round(value)} ms`;
+}
+
+function normalizeSeed(seed) {
+  const n = Number(seed);
+  if (Number.isFinite(n) && n > 0) return Math.floor(n);
+  return 101;
+}
+
+function hashSeed(text) {
+  const str = String(text ?? '101');
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i += 1) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function createSeededRng(seed) {
+  let state = hashSeed(seed) || 1;
+  return function next() {
+    state += 0x6D2B79F5;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function makeCheck(label, pass, actual, expected) {
+  return { label, pass: !!pass, actual, expected };
+}
+
+function getScenarioSeedValue(scenario = null) {
+  const input = document.getElementById('sim-seed');
+  const fromInput = normalizeSeed(input?.value);
+  if (Number.isFinite(fromInput) && fromInput > 0 && input?.value) return fromInput;
+  return normalizeSeed(scenario?.seed ?? simState.seed ?? 101);
+}
+
+function setScenarioSeedValue(seed) {
+  const input = document.getElementById('sim-seed');
+  if (input) input.value = String(normalizeSeed(seed));
+}
+
+function calculateScenarioScore(checks) {
+  if (!checks.length) return 0;
+  const passCount = checks.filter(c => c.pass).length;
+  return Math.round((passCount / checks.length) * 100);
+}
+
+function scoreLabelFromPercent(percent) {
+  if (percent >= 100) return '10/10';
+  if (percent >= 90) return '9/10';
+  if (percent >= 80) return '8/10';
+  if (percent >= 70) return '7/10';
+  if (percent >= 60) return '6/10';
+  if (percent >= 50) return '5/10';
+  return `${Math.max(0, Math.round(percent / 10))}/10`;
+}
+
+function getScenarioCooldownMinutes() {
+  return Number(simState.activeScenario?.cooldownMinutes ?? 30);
+}
+
+function getScenarioCooldownMs() {
+  return Math.max(1000, getScenarioCooldownMinutes() * 60 * 1000);
+}
+
+function getScenario(id) {
+  return simScenarios.find(s => s.id === id) || simScenarios[0];
+}
+
+function renderScenarioSelect() {
+  const select = document.getElementById('sim-scenario-select');
+  const desc = document.getElementById('sim-scenario-desc');
+  if (!select) return;
+
+  const current = select.value || simState.test.scenarioId || simScenarios[0].id;
+  select.innerHTML = simScenarios.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+  select.value = current;
+
+  const scenario = getScenario(select.value);
+  if (desc) desc.textContent = scenario.desc;
+  if (simState.test.status !== 'RUNNING') setScenarioSeedValue(scenario.seed ?? simState.seed ?? 101);
+}
+
+function updateScenarioDescription(scenarioId) {
+  const scenario = getScenario(scenarioId);
+  const desc = document.getElementById('sim-scenario-desc');
+  if (desc) desc.textContent = scenario.desc;
+}
+
+function renderScenarioBadge() {
+  const badge = document.getElementById('sim-scenario-badge');
+  if (!badge) return;
+  const status = simState.test.status || 'IDLE';
+  badge.textContent = status;
+  badge.className = 'sim-chip ';
+  if (status === 'PASS') badge.className += 'bg-emerald-500/15 text-emerald-300';
+  else if (status === 'FAIL') badge.className += 'bg-rose-500/15 text-rose-300';
+  else if (status === 'RUNNING') badge.className += 'bg-cyan-500/15 text-cyan-300';
+  else badge.className += 'bg-white/5 text-[#f0e6d3]';
+}
+
+function renderSimSummary() {
+  updateScenarioMetricsFromState();
+  const badge = document.getElementById('sim-summary-badge');
+  const scenarioLine = document.getElementById('sim-summary-scenario');
+  const score = document.getElementById('sim-summary-score');
+  const seed = document.getElementById('sim-summary-seed');
+  const duration = document.getElementById('sim-summary-duration');
+  const enters = document.getElementById('sim-summary-enters');
+  const api = document.getElementById('sim-summary-api');
+  const avg = document.getElementById('sim-summary-avg');
+  const checks = document.getElementById('sim-summary-checks');
+  if (!badge || !duration || !enters || !api || !avg || !checks || !scenarioLine || !score || !seed) return;
+
+  const test = simState.test;
+  scenarioLine.textContent = `Scenario: ${test.name || '—'}`;
+  seed.textContent = String(test.seed ?? simState.seed ?? '—');
+  const running = test.status === 'RUNNING';
+  if (running) {
+    badge.textContent = 'RUNNING';
+    badge.className = 'sim-chip bg-cyan-500/15 text-cyan-300';
+  } else if (test.status === 'PASS') {
+    badge.textContent = 'PASS';
+    badge.className = 'sim-chip bg-emerald-500/15 text-emerald-300';
+  } else if (test.status === 'FAIL') {
+    badge.textContent = 'FAIL';
+    badge.className = 'sim-chip bg-rose-500/15 text-rose-300';
+  } else {
+    badge.textContent = 'NO RUN';
+    badge.className = 'sim-chip bg-white/5 text-[#f0e6d3]';
+  }
+
+  duration.textContent = test.startedAt ? formatElapsed(test.startedAt, test.endedAt || Date.now()) : '—';
+  enters.textContent = String(simState.totalEnters ?? 0);
+  api.textContent = `${test.metrics.apiOk} ✓ / ${test.metrics.apiFail} ✕`;
+  avg.textContent = fmtMs(test.metrics.avgLatencyMs);
+
+  const passCount = test.checks.filter(c => c.pass).length;
+  const percent = test.checks.length ? Math.round((passCount / test.checks.length) * 100) : 0;
+  test.score = percent;
+  score.textContent = test.checks.length ? `${scoreLabelFromPercent(percent)} (${percent}%)` : '—';
+
+  if (!test.checks.length) {
+    checks.innerHTML = '<div class="text-[#8d7a66]">Chưa chạy scenario nào.</div>';
+    return;
+  }
+
+  checks.innerHTML = test.checks.map(check => `
+    <div class="flex items-start gap-2 rounded-xl border px-3 py-2 ${check.pass ? 'border-emerald-500/20 bg-emerald-500/5 text-emerald-200' : 'border-rose-500/20 bg-rose-500/5 text-rose-200'}">
+      <span class="mt-0.5 text-xs font-black">${check.pass ? 'PASS' : 'FAIL'}</span>
+      <div class="min-w-0 flex-1">
+        <div class="font-bold">${escapeHtml(check.label)}</div>
+        <div class="text-[11px] text-current/75">Actual: ${escapeHtml(String(check.actual))} | Expected: ${escapeHtml(String(check.expected))}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function formatElapsed(start, end) {
+  const ms = Math.max(0, (end || Date.now()) - start);
+  const sec = Math.floor(ms / 1000);
+  const min = Math.floor(sec / 60);
+  const rem = sec % 60;
+  return `${String(min).padStart(2, '0')}:${String(rem).padStart(2, '0')}`;
+}
+
+function metersToLatLng(lat, metersNorth, metersEast) {
+  const latDelta = metersNorth / 111320;
+  const lngDelta = metersEast / (111320 * Math.cos(lat * Math.PI / 180));
+  return { latDelta, lngDelta };
+}
+
+function offsetLatLng(lat, lng, metersNorth, metersEast) {
+  const delta = metersToLatLng(lat, metersNorth, metersEast);
+  return { lat: lat + delta.latDelta, lng: lng + delta.lngDelta };
+}
+
+function makeSimDeviceIcon(color, label, selected = false) {
+  const border = selected ? '#f0e6d3' : 'rgba(255,255,255,0.8)';
+  const shadow = selected ? '0 0 0 4px rgba(200,169,110,0.16)' : '0 0 0 4px rgba(59,130,246,0.10)';
+  return L.divIcon({
+    className: '',
+    html: `
+      <div style="display:flex;flex-direction:column;align-items:center;gap:3px;transform:translateY(-4px);">
+        <div style="padding:2px 7px;border-radius:999px;background:rgba(0,0,0,0.72);color:#fff;font-size:10px;font-weight:800;box-shadow:0 8px 20px rgba(0,0,0,0.18);white-space:nowrap">${label}</div>
+        <div style="width:18px;height:18px;border-radius:50%;background:${color};border:3px solid ${border};box-shadow:${shadow}"></div>
+      </div>`,
+    iconSize: [32, 38],
+    iconAnchor: [16, 34],
+    popupAnchor: [0, -30]
+  });
+}
+
+function initSimState() {
+  if (!simEnabled) return;
+  const targets = getSimTargets();
+  if (!targets.length) return;
+
+  const origin = targets[0];
+  simState.currentClusterKey = targets.map(t => t.placeId).join(',');
+  const deviceCount = simState.activeScenario?.deviceCount || 3;
+  const rng = simState.rng || Math.random;
+  simState.devices = Array.from({ length: deviceCount }, (_, idx) => {
+    const angle = (idx / Math.max(1, deviceCount)) * Math.PI * 2 + rng() * 0.3;
+    const radius = 28 + Math.round(rng() * 14);
+    const start = offsetLatLng(origin.latitude, origin.longitude, radius * Math.cos(angle), radius * Math.sin(angle));
+    return {
+      id: `DEV-${idx + 1}`,
+      color: simPalette[idx % simPalette.length],
+      selected: idx === 0,
+      lat: start.lat,
+      lng: start.lng,
+      targetIndex: idx % targets.length,
+      queue: 0,
+      enters: 0,
+      cooldownHits: 0,
+      apiOk: 0,
+      apiFail: 0,
+      avgMs: 0,
+      currentPoiId: null,
+      currentPoiName: '—',
+      destinationName: targets[idx % targets.length]?.name || '—',
+      lastEnterAt: null,
+      lastCooldownPlaceId: null,
+      holdTicks: 0,
+      cycleHits: 0,
+      deterministicHits: 0,
+    };
+  });
+  simState.totalEnters = 0;
+  simState.test.metrics.uniqueDeviceIds = 0;
+  renderSimUI();
+  renderSimMap();
+  addSimLog(`initialized ${simState.devices.length} device(s) with ${targets.length} target(s)`, 'meta');
+}
+
+function getSimDevice(deviceId = simState.selectedDeviceId) {
+  return simState.devices.find(d => d.id === deviceId) || simState.devices[0] || null;
+}
+
+function selectSimDevice(deviceId) {
+  simState.selectedDeviceId = deviceId;
+  simState.devices.forEach(d => d.selected = d.id === deviceId);
+  const label = document.getElementById('sim-selected-label');
+  if (label) label.textContent = deviceId;
+  renderSimMap();
+  renderSimUI();
+}
+
+function renderSimUI() {
+  const table = document.getElementById('sim-device-table');
+  if (!table) return;
+  document.getElementById('sim-device-count').textContent = String(simState.devices.length);
+  document.getElementById('sim-enter-count').textContent = String(simState.totalEnters);
+  document.getElementById('sim-log-badge').classList.toggle('hidden', !simState.running);
+  renderScenarioSelect();
+  renderScenarioBadge();
+  renderSimSummary();
+  renderSimTargetSelect();
+
+  table.innerHTML = simState.devices.map(d => {
+    const cooldownMs = getScenarioCooldownMs();
+    const cooldown = d.lastEnterAt ? `${Math.max(0, Math.ceil((cooldownMs - (Date.now() - d.lastEnterAt)) / 1000))}s` : '0s';
+    const rowClass = d.id === simState.selectedDeviceId ? 'sim-device-row active' : 'sim-device-row';
+    return `
+      <tr class="${rowClass}" onclick="selectSimDevice('${d.id}')">
+        <td class="px-3 py-3 font-bold">
+          <span class="inline-flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full" style="background:${d.color}"></span>
+            ${d.id}
+          </span>
+        </td>
+        <td class="px-3 py-3">${d.queue}</td>
+        <td class="px-3 py-3">${d.enters}</td>
+        <td class="px-3 py-3">${cooldown}</td>
+        <td class="px-3 py-3 text-emerald-300">${d.apiOk}</td>
+        <td class="px-3 py-3 text-rose-300">${d.apiFail}</td>
+        <td class="px-3 py-3">${d.avgMs ? Math.round(d.avgMs) : '—'}</td>
+        <td class="px-3 py-3">${escapeHtml(d.currentPoiName || '—')}</td>
+        <td class="px-3 py-3">${escapeHtml(d.destinationName || '—')}</td>
+      </tr>`;
+  }).join('');
+}
+
+function renderSimTargetSelect() {
+  const select = document.getElementById('sim-target-select');
+  if (!select) return;
+
+  const targets = getSimTargets();
+  const device = getSimDevice();
+  const currentValue = device ? String(currentSimTarget(device)?.placeId ?? '') : '';
+
+  select.innerHTML = targets.map(t => {
+    const selected = String(t.placeId) === currentValue ? 'selected' : '';
+    return `<option value="${t.placeId}" ${selected}>${escapeHtml(t.name)}</option>`;
+  }).join('');
+
+  if (device && currentValue && select.value !== currentValue) {
+    select.value = currentValue;
+  }
+}
+
+function clearSimMapLayers() {
+  simState.markers.forEach(m => map.removeLayer(m));
+  simState.circles.forEach(c => map.removeLayer(c));
+  simState.routes.forEach(r => map.removeLayer(r));
+  simState.markers = [];
+  simState.circles = [];
+  simState.routes = [];
+}
+
+function renderSimMap() {
+  if (!simState.devices.length) return;
+  clearSimMapLayers();
+
+  simState.devices.forEach(device => {
+    const marker = L.marker([device.lat, device.lng], {
+      icon: makeSimDeviceIcon(device.color, device.id, device.selected)
+    }).addTo(map);
+    marker.on('click', () => selectSimDevice(device.id));
+    simState.markers.push(marker);
+  });
+
+  const targets = getSimTargets();
+  targets.forEach(target => {
+    const radius = Number(target.radius || 50);
+    const circle = L.circle([target.latitude, target.longitude], {
+      radius,
+      color: '#e94560',
+      weight: 1.5,
+      fillColor: '#e94560',
+      fillOpacity: 0.06,
+      dashArray: '5,6'
+    }).addTo(map);
+    simState.circles.push(circle);
+  });
+}
+
+function currentSimTarget(device) {
+  const targets = getSimTargets();
+  if (!targets.length) return null;
+  return targets[device.targetIndex % targets.length];
+}
+
+function advanceSimTarget(device) {
+  const targets = getSimTargets();
+  if (!targets.length) return null;
+  device.targetIndex = (device.targetIndex + 1) % targets.length;
+  return currentSimTarget(device);
+}
+
+function applyScenarioPreset(scenario) {
+  const cluster = document.getElementById('sim-cluster');
+  const step = document.getElementById('sim-step');
+  const interval = document.getElementById('sim-interval');
+  const select = document.getElementById('sim-scenario-select');
+  if (cluster) cluster.value = scenario.cluster || 'top4';
+  if (step && scenario.step != null) step.value = scenario.step;
+  if (interval && scenario.interval != null) interval.value = scenario.interval;
+  if (select) select.value = scenario.id;
+  renderSimTargetSelect();
+}
+
+function resetScenarioStats() {
+  simState.events = [];
+  simState.test = {
+    scenarioId: null,
+    name: null,
+    status: 'IDLE',
+    startedAt: null,
+    endedAt: null,
+    seed: null,
+    checks: [],
+    resultText: 'NO RUN',
+    score: 0,
+    metrics: {
+      apiOk: 0,
+      apiFail: 0,
+      cooldownHits: 0,
+      targetChanges: 0,
+      manualMoves: 0,
+      uniqueDeviceIds: 0,
+      avgLatencyMs: 0,
+      totalEvents: 0,
+      cycleHits: 0,
+      deterministicHits: 0
+    }
+  };
+  renderScenarioBadge();
+  renderSimSummary();
+}
+
+function startScenarioMetrics(scenario) {
+  const seed = normalizeSeed(getScenarioSeedValue(scenario));
+  simState.seed = seed;
+  simState.rng = createSeededRng(seed);
+  simState.test.scenarioId = scenario.id;
+  simState.test.name = scenario.name;
+  simState.test.status = 'RUNNING';
+  simState.test.startedAt = Date.now();
+  simState.test.endedAt = null;
+  simState.test.seed = seed;
+  simState.test.checks = [];
+  simState.test.resultText = 'RUNNING';
+  simState.test.metrics = {
+    apiOk: 0,
+    apiFail: 0,
+    cooldownHits: 0,
+    targetChanges: 0,
+    manualMoves: 0,
+    uniqueDeviceIds: 0,
+    avgLatencyMs: 0,
+    totalEvents: 0,
+    cycleHits: 0,
+    deterministicHits: 0
+  };
+  simState.activeScenario = scenario;
+  setScenarioSeedValue(seed);
+  renderScenarioBadge();
+  renderSimSummary();
+  addSimLog(`seed locked: ${seed}`, 'meta');
+}
+
+function updateScenarioMetricsFromState() {
+  const test = simState.test;
+  const enterEvents = simState.events.filter(e => e.type === 'enter');
+  const uniqueDevices = new Set(enterEvents.map(e => e.deviceId).filter(Boolean));
+  const latencies = simState.events.filter(e => e.type === 'api').map(e => e.latency).filter(n => typeof n === 'number');
+  test.metrics.apiOk = simState.devices.reduce((sum, d) => sum + (d.apiOk || 0), 0);
+  test.metrics.apiFail = simState.devices.reduce((sum, d) => sum + (d.apiFail || 0), 0);
+  test.metrics.cooldownHits = simState.devices.reduce((sum, d) => sum + (d.cooldownHits || 0), 0);
+  test.metrics.targetChanges = simState.events.filter(e => e.type === 'target-change').length;
+  test.metrics.manualMoves = simState.events.filter(e => e.type === 'manual-move').length;
+  test.metrics.uniqueDeviceIds = uniqueDevices.size;
+  test.metrics.avgLatencyMs = latencies.length ? latencies.reduce((a, b) => a + b, 0) / latencies.length : 0;
+  test.metrics.totalEvents = simState.events.length;
+  test.metrics.cycleHits = simState.events.filter(e => e.type === 'cycle-hit').length;
+  test.metrics.deterministicHits = simState.events.filter(e => e.type === 'deterministic-hit').length;
+}
+
+function finishScenarioTest(reason = 'done') {
+  if (!simState.activeScenario) return;
+  if (simState.scenarioTimer) {
+    clearTimeout(simState.scenarioTimer);
+    simState.scenarioTimer = null;
+  }
+  stopSimTimer();
+  updateScenarioMetricsFromState();
+  const scenario = simState.activeScenario;
+  const checks = typeof scenario.evaluate === 'function' ? scenario.evaluate(simState) : [];
+  simState.test.checks = checks;
+  simState.test.endedAt = Date.now();
+  simState.test.status = checks.every(c => c.pass) ? 'PASS' : 'FAIL';
+  simState.test.score = calculateScenarioScore(checks);
+  simState.test.resultText = `${simState.test.status} | ${scoreLabelFromPercent(simState.test.score)}${reason ? ` (${reason})` : ''}`;
+  simState.activeScenario = null;
+  addSimLog(`scenario ${simState.test.resultText}`, simState.test.status === 'PASS' ? 'success' : 'error');
+  renderScenarioBadge();
+  renderSimSummary();
+}
+
+function runSelectedScenario() {
+  const scenario = getScenario(document.getElementById('sim-scenario-select')?.value);
+  stopScenarioTest(false);
+  resetSimState();
+  applyScenarioPreset(scenario);
+  simState.activeScenario = scenario;
+  startScenarioMetrics(scenario);
+  initSimState();
+  if (!simState.devices.length) return;
+
+  // scenario-specific initial position setup
+  scenario.setup?.(simState);
+  simState.devices.forEach((device, index) => {
+    if (scenario.deviceCount === 1 && index > 0) return;
+    if (scenario.convergeFirst) {
+      const master = getSimTargets()[0];
+      if (master) {
+        const pos = offsetLatLng(master.latitude, master.longitude, 18 + index * 8, index % 2 === 0 ? 18 : -18);
+        device.lat = pos.lat;
+        device.lng = pos.lng;
+        device.targetIndex = 0;
+      }
+    }
+  });
+
+  addSimLog(`scenario start: ${scenario.name}`, 'meta');
+  if (scenario.requiresManualTargetChange) {
+    addSimLog('manual step: change target from dropdown, then start walk', 'meta');
+  }
+  trackSimEvent('scenario-start', { scenarioId: scenario.id, name: scenario.name });
+  renderSimMap();
+  renderSimUI();
+
+  if (scenario.autoStartWalk) startSimTimer();
+
+  simState.scenarioTimer = setTimeout(() => finishScenarioTest('timeout'), scenario.durationMs || 15000);
+}
+
+function replaySelectedScenario() {
+  const scenario = getScenario(document.getElementById('sim-scenario-select')?.value);
+  const seed = normalizeSeed(simState.test.seed ?? scenario.seed ?? getScenarioSeedValue(scenario));
+  setScenarioSeedValue(seed);
+  runSelectedScenario();
+}
+
+function stopScenarioTest(manual = true) {
+  if (simState.scenarioTimer) {
+    clearTimeout(simState.scenarioTimer);
+    simState.scenarioTimer = null;
+  }
+  if (simState.activeScenario) {
+    updateScenarioMetricsFromState();
+    const scenario = simState.activeScenario;
+    const checks = typeof scenario.evaluate === 'function' ? scenario.evaluate(simState) : [];
+    simState.test.checks = checks;
+    simState.test.endedAt = Date.now();
+    simState.test.status = checks.every(c => c.pass) ? 'PASS' : 'FAIL';
+    simState.test.score = calculateScenarioScore(checks);
+    simState.test.resultText = `${simState.test.status} | ${scoreLabelFromPercent(simState.test.score)}${manual ? ' (manual stop)' : ''}`;
+    simState.activeScenario = null;
+    addSimLog(`scenario stop: ${simState.test.resultText}`, simState.test.status === 'PASS' ? 'success' : 'error');
+    renderScenarioBadge();
+    renderSimSummary();
+  }
+}
+
+function exportSimSessionJson() {
+  updateScenarioMetricsFromState();
+  const scenario = simState.activeScenario || getScenario(simState.test.scenarioId);
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    seed: simState.test.seed,
+    scenario: simState.test.name,
+    scenarioConfig: scenario ? {
+      id: scenario.id,
+      name: scenario.name,
+      cluster: scenario.cluster,
+      step: scenario.step,
+      interval: scenario.interval,
+      durationMs: scenario.durationMs,
+      cooldownMinutes: scenario.cooldownMinutes ?? 30,
+      holdTarget: !!scenario.holdTarget,
+      autoStartWalk: !!scenario.autoStartWalk
+    } : null,
+    test: simState.test,
+    devices: simState.devices.map(d => ({
+      id: d.id,
+      lat: d.lat,
+      lng: d.lng,
+      enters: d.enters,
+      cooldownHits: d.cooldownHits,
+      apiOk: d.apiOk,
+      apiFail: d.apiFail,
+      avgMs: d.avgMs,
+      currentPoiName: d.currentPoiName,
+      destinationName: d.destinationName,
+      cycleHits: d.cycleHits || 0,
+      deterministicHits: d.deterministicHits || 0
+    })),
+    events: simState.events,
+    logs: simState.log
+  };
+
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `geofence-sim-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 300);
+}
+
+function setSelectedDeviceTarget(placeIdText) {
+  const device = getSimDevice();
+  if (!device) return;
+  const placeId = Number(placeIdText);
+  const targets = getSimTargets();
+  const index = targets.findIndex(t => t.placeId === placeId);
+  if (index < 0) return;
+  device.targetIndex = index;
+  device.destinationName = targets[index].name;
+  trackSimEvent('target-change', { deviceId: device.id, placeId, placeName: targets[index].name });
+  simState.test.metrics.targetChanges += 1;
+  addSimLog(`${device.id} target -> ${targets[index].name}`, 'meta');
+  renderSimMap();
+  renderSimUI();
+}
+
+function setSimDestination(device, target) {
+  device.destinationName = target ? target.name : '—';
+  renderSimUI();
+}
+
+function distanceToTarget(device, target) {
+  return target ? haversine(device.lat, device.lng, target.latitude, target.longitude) : Infinity;
+}
+
+function maybeTriggerEnter(device, place) {
+  const radius = Number(place.radius || 50);
+  const dist = haversine(device.lat, device.lng, place.latitude, place.longitude);
+  const now = Date.now();
+  const cooldownMinutes = Number(simState.activeScenario?.cooldownMinutes ?? place.cooldownMinutes ?? 30);
+  const cooldownMs = Math.max(1000, cooldownMinutes * 60 * 1000);
+  const cooldownActive = device.lastEnterAt && (now - device.lastEnterAt) < cooldownMs && device.lastCooldownPlaceId === place.placeId;
+  const cooldownElapsed = device.lastEnterAt && (now - device.lastEnterAt) >= cooldownMs && device.lastCooldownPlaceId === place.placeId;
+
+  if (dist > radius) {
+    device.currentPoiId = null;
+    device.currentPoiName = '—';
+    return;
+  }
+
+  if (cooldownActive) {
+    device.cooldownHits += 1;
+    device.currentPoiId = place.placeId;
+    device.currentPoiName = place.name;
+    trackSimEvent('cooldown', { deviceId: device.id, placeId: place.placeId, placeName: place.name });
+    return;
+  }
+
+  if (device.currentPoiId !== place.placeId || cooldownElapsed) {
+    device.queue += 1;
+    device.currentPoiId = place.placeId;
+    device.currentPoiName = place.name;
+    device.lastEnterAt = now;
+    device.lastCooldownPlaceId = place.placeId;
+    device.enters += 1;
+    simState.totalEnters += 1;
+    trackSimEvent('enter', { deviceId: device.id, placeId: place.placeId, placeName: place.name });
+    trackSimEvent('deterministic-hit', { deviceId: device.id, placeId: place.placeId });
+    device.deterministicHits += 1;
+    setSimDestination(device, currentSimTarget(device));
+    addSimLog(`${device.id} enter geofence: ${place.name}`, 'success');
+    renderSimUI();
+
+    const latency = 180 + Math.floor((simState.rng || Math.random)() * 620);
+    setTimeout(() => {
+      device.queue = Math.max(0, device.queue - 1);
+      const ok = simState.activeScenario?.simulateApiFlakiness ? (simState.rng || Math.random)() > 0.12 : true;
+      if (ok) {
+        device.apiOk += 1;
+        device.avgMs = device.avgMs ? (device.avgMs * 0.75 + latency * 0.25) : latency;
+        trackSimEvent('api', { deviceId: device.id, placeId: place.placeId, placeName: place.name, latency, ok: true });
+        addSimLog(`${device.id} API OK ${latency}ms -> ${place.name}`, 'success');
+      } else {
+        device.apiFail += 1;
+        trackSimEvent('api', { deviceId: device.id, placeId: place.placeId, placeName: place.name, latency, ok: false });
+        addSimLog(`${device.id} API FAIL -> ${place.name}`, 'error');
+      }
+      renderSimUI();
+    }, latency);
+  }
+}
+
+function tickSimWalk() {
+  const targets = getSimTargets();
+  if (!targets.length) return;
+
+  const stepMeters = Math.max(1, Number(document.getElementById('sim-step')?.value || 18));
+  simState.devices.forEach(device => {
+    const target = currentSimTarget(device);
+    if (!target) return;
+
+    const dist = distanceToTarget(device, target);
+    if (dist < Math.max(8, stepMeters * 0.9)) {
+      device.lat = target.latitude;
+      device.lng = target.longitude;
+      maybeTriggerEnter(device, target);
+      if (!simState.activeScenario?.holdTarget) {
+        advanceSimTarget(device);
+      }
+      setSimDestination(device, currentSimTarget(device));
+      return;
+    }
+
+    const ratio = Math.min(1, stepMeters / Math.max(dist, 1));
+    device.lat = device.lat + (target.latitude - device.lat) * ratio;
+    device.lng = device.lng + (target.longitude - device.lng) * ratio;
+    device.destinationName = target.name;
+
+    const near = targets
+      .slice()
+      .sort((a, b) => haversine(device.lat, device.lng, a.latitude, a.longitude) - haversine(device.lat, device.lng, b.latitude, b.longitude))[0];
+    if (near) maybeTriggerEnter(device, near);
+    if (near && near.placeId === target.placeId) {
+      device.cycleHits = (device.cycleHits || 0) + 1;
+      trackSimEvent('cycle-hit', { deviceId: device.id, placeId: target.placeId, placeName: target.name });
+    }
+  });
+
+  renderSimMap();
+  renderSimUI();
+}
+
+function startSimTimer() {
+  stopSimTimer();
+  simState.running = true;
+  document.getElementById('sim-toggle-btn').textContent = 'Stop Walk';
+  document.getElementById('sim-log-badge').classList.remove('hidden');
+  trackSimEvent('walk-start');
+  addSimLog('auto-walk ON', 'meta');
+  const interval = Math.max(100, Number(document.getElementById('sim-interval')?.value || 400));
+  simState.timer = setInterval(tickSimWalk, interval);
+  renderSimUI();
+}
+
+function stopSimTimer() {
+  if (simState.timer) {
+    clearInterval(simState.timer);
+    simState.timer = null;
+  }
+  if (simState.running) {
+    trackSimEvent('walk-stop');
+    addSimLog('auto-walk OFF', 'meta');
+  }
+  simState.running = false;
+  const btn = document.getElementById('sim-toggle-btn');
+  if (btn) btn.textContent = 'Start Walk';
+  renderSimUI();
+}
+
+function toggleSimWalk() {
+  if (simState.running) stopSimTimer();
+  else startSimTimer();
+}
+
+function convergeSimDevices() {
+  const targets = getSimTargets();
+  if (!targets.length) return;
+  const master = targets[0];
+  simState.devices.forEach((device, index) => {
+    const rng = simState.rng || Math.random;
+    const spread = 14 + Math.round(rng() * 10) + (index * 8);
+    const pos = offsetLatLng(master.latitude, master.longitude, spread, spread * (index % 2 === 0 ? 1 : -1));
+    device.lat = pos.lat;
+    device.lng = pos.lng;
+    device.targetIndex = 0;
+    device.destinationName = master.name;
+  });
+  trackSimEvent('converge', { targetPlaceId: master.placeId, placeName: master.name });
+  addSimLog(`converge all devices to ${master.name}`, 'meta');
+  renderSimMap();
+  renderSimUI();
+}
+
+function moveDeviceByMeters(device, northMeters, eastMeters) {
+  const pos = offsetLatLng(device.lat, device.lng, northMeters, eastMeters);
+  device.lat = pos.lat;
+  device.lng = pos.lng;
+}
+
+function nudgeSelectedDevice(dx, dy) {
+  const device = getSimDevice();
+  if (!device) return;
+  const meters = 12;
+  moveDeviceByMeters(device, dy * meters, dx * meters);
+  const target = currentSimTarget(device);
+  if (target) maybeTriggerEnter(device, target);
+  trackSimEvent('manual-move', { deviceId: device.id, dx, dy });
+  simState.test.metrics.manualMoves += 1;
+  addSimLog(`${device.id} manual move dx=${dx}, dy=${dy}`, 'meta');
+  renderSimMap();
+  renderSimUI();
+}
+
+function clearSimLog() {
+  simState.log = [];
+  localStorage.removeItem(simState.logKey);
+  renderSimLog();
+}
+
+function saveSimLog() {
+  localStorage.setItem(simState.logKey, JSON.stringify(simState.log));
+  toast('Da luu simulator log', 'success');
+}
+
+function downloadSimLog() {
+  const text = simState.log.map(x => `${x.at} | [SIM] ${x.message}`).join('\n') || '[SIM] empty log';
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `geofence-sim-${new Date().toISOString().replace(/[:.]/g, '-')}.log`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 300);
+}
+
+function toggleSimLogViewer() {
+  const text = simState.log.map(x => `${x.at} | [SIM] ${x.message}`).join('\n') || '[SIM] empty log';
+  const w = window.open('', '_blank', 'noopener,noreferrer,width=980,height=720');
+  if (!w) {
+    toast('Trinh duyet dang chan pop-up', 'error');
+    return;
+  }
+  w.document.write(`<pre style="white-space:pre-wrap;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:24px;background:#0a0f0c;color:#8bf5a5;margin:0">${escapeHtml(text)}</pre>`);
+  w.document.title = 'Geofence simulator log';
+  w.document.close();
+}
+
+function resetSimState() {
+  stopSimTimer();
+  clearSimMapLayers();
+  if (simState.scenarioTimer) {
+    clearTimeout(simState.scenarioTimer);
+    simState.scenarioTimer = null;
+  }
+  simState.activeScenario = null;
+  simState.seed = null;
+  simState.rng = Math.random;
+  resetScenarioStats();
+  initSimState();
+  addSimLog('simulator reset', 'meta');
+}
+
+function syncSimMapLabels() {
+  const selected = getSimDevice();
+  if (selected) document.getElementById('sim-selected-label').textContent = selected.id;
+}
+
 const markers = {};
 const bounds  = [];
 const tempM   = { ref: null };
@@ -529,6 +1948,16 @@ places.forEach(p => {
   bounds.push([p.latitude,p.longitude]);
 });
 if (bounds.length) map.fitBounds(bounds, { padding:[40,40], maxZoom:15 });
+loadSimLog();
+if (simEnabled) {
+  initSimState();
+  renderScenarioSelect();
+  renderScenarioBadge();
+  renderSimSummary();
+  setInterval(() => {
+    if (simState.devices.length) renderSimUI();
+  }, 1000);
+}
 
 function focusPlace(id) {
   const m = markers[id]; if (!m) return;
@@ -681,5 +2110,71 @@ function toast(msg,type) {
   if(!c){c=document.createElement('div');c.id='toast-container';c.className='fixed bottom-6 right-6 z-[9999] flex flex-col gap-3';document.body.appendChild(c);}
   c.appendChild(el); setTimeout(()=>el.remove(),4000);
 }
+
+// ── Load Test Functions ──────────────────────────────────────────────────
+async function runLoadTest() {
+  const scenario = document.getElementById('test-scenario').value;
+  const baseUrl = document.getElementById('test-base-url').value || 'http://localhost:5010';
+  const btn = document.getElementById('test-btn-text').parentElement;
+  const outputContainer = document.getElementById('test-output-container');
+  const output = document.getElementById('test-output');
+  const status = document.getElementById('test-status');
+  
+  btn.disabled = true;
+  status.classList.remove('hidden');
+  outputContainer.classList.remove('hidden');
+  output.innerHTML = '';
+  
+  try {
+    const response = await fetch(`/LoadTest/Run?file=${encodeURIComponent(scenario)}&baseUrl=${encodeURIComponent(baseUrl)}`);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.substring(6);
+          addTestOutput(data, output);
+        }
+      }
+    }
+    
+    status.classList.add('hidden');
+    toast('Test hoàn thành!', 'success');
+  } catch (e) {
+    addTestOutput(`[ERROR] ${e.message}`, output, 'error');
+    status.classList.add('hidden');
+    toast('Lỗi test: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function addTestOutput(line, container, type = '') {
+  const div = document.createElement('div');
+  div.className = `test-output-line ${type === 'error' ? 'test-output-error' : type === 'success' ? 'test-output-success' : ''}`;
+  div.textContent = line;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function clearTestOutput() {
+  document.getElementById('test-output').innerHTML = '';
+  document.getElementById('test-output-container').classList.add('hidden');
+}
 </script>
 }
+
