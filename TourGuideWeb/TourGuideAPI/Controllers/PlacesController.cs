@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using TourGuideAPI.Data;
@@ -15,18 +16,26 @@ namespace TourGuideAPI.Controllers;
 [Route("api/places")]
 [EnableRateLimiting("general")]
 public class PlacesController(
-    AppDbContext db, 
-    IGeoLocationService geo, 
-    ILogger<PlacesController> logger, 
+    AppDbContext db,
+    IGeoLocationService geo,
+    ILogger<PlacesController> logger,
     IConfiguration config,
-    ICacheService cache) : ControllerBase
+    ICacheService cache,
+    IOutputCacheStore outputCache) : ControllerBase
 {
     private int OwnerId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+    private async Task InvalidateAllCaches(CancellationToken ct = default)
+    {
+        cache.RemoveByPattern("places:*");
+        await outputCache.EvictByTagAsync("places", ct);
+    }
     private const string PLACES_CACHE_KEY = "places:all";
     private const int CACHE_DURATION_MINUTES = 30;
 
     // ── GET /api/places ───────────────────────────────────────────
     [HttpGet]
+    [OutputCache(PolicyName = "places")]
     public async Task<IActionResult> GetAll(
         [FromQuery] string? search,
         [FromQuery] int? categoryId,
@@ -55,6 +64,7 @@ public class PlacesController(
         
         // ⚠️ OPTIMIZED: No .Include() - move to Select() to avoid N+1
         var query = db.Places
+            .AsNoTracking()
             .Where(p => p.Status == "Active" && p.IsActive);
 
         if (!string.IsNullOrEmpty(search))
@@ -232,6 +242,7 @@ public class PlacesController(
 
     // ── GET /api/places/{id} ──────────────────────────────────────
     [HttpGet("{id}")]
+    [OutputCache(PolicyName = "place")]
     public async Task<IActionResult> GetById(int id)
     {
         var cacheKey = $"places:detail:{id}";
@@ -318,7 +329,7 @@ public class PlacesController(
             await db.SaveChangesAsync();
             
             // ✅ INVALIDATE CACHE - clear all places & owner caches
-            cache.RemoveByPattern("places:*");
+            await InvalidateAllCaches();
             logger.LogInformation($"🗑️ Invalidated cache after creating place {place.PlaceId}");
             
             return CreatedAtAction(nameof(GetById), new { id = place.PlaceId }, place);
@@ -363,8 +374,7 @@ public class PlacesController(
 
             await db.SaveChangesAsync();
             
-            // ✅ INVALIDATE CACHE - clear all places & detail caches
-            cache.RemoveByPattern("places:*");
+            await InvalidateAllCaches();
             logger.LogInformation($"🗑️ Invalidated cache after updating place {id}");
             
             return Ok(place);
@@ -396,9 +406,7 @@ public class PlacesController(
         place.OpenStatus = openStatus;
         await db.SaveChangesAsync();
         
-        // ✅ INVALIDATE CACHE
-        cache.Remove($"places:detail:{id}");
-        cache.RemoveByPattern("places:*");
+        await InvalidateAllCaches();
         
         return Ok(new { openStatus });
     }
@@ -426,9 +434,7 @@ public class PlacesController(
         db.PlaceImages.Add(image);
         await db.SaveChangesAsync();
         
-        // ✅ INVALIDATE CACHE
-        cache.Remove($"places:detail:{id}");
-        cache.RemoveByPattern("places:*");
+        await InvalidateAllCaches();
         
         return Ok(image);
     }
@@ -449,9 +455,7 @@ public class PlacesController(
         db.PlaceImages.Remove(image);
         await db.SaveChangesAsync();
         
-        // ✅ INVALIDATE CACHE
-        cache.Remove($"places:detail:{id}");
-        cache.RemoveByPattern("places:*");
+        await InvalidateAllCaches();
         
         return NoContent();
     }
@@ -482,9 +486,7 @@ public class PlacesController(
 
             await db.SaveChangesAsync();
             
-            // ✅ INVALIDATE CACHE - clear all places & detail caches
-            cache.Remove($"places:detail:{id}");
-            cache.RemoveByPattern("places:*");
+            await InvalidateAllCaches();
             logger.LogInformation($"🗑️ Invalidated cache after deleting place {id}");
             
             return NoContent();
@@ -760,9 +762,7 @@ public class PlacesController(
         db.PlaceTtsContents.Add(content);
         await db.SaveChangesAsync();
 
-        // ✅ INVALIDATE CACHE
-        cache.Remove($"places:detail:{id}");
-        cache.RemoveByPattern("places:*");
+        await InvalidateAllCaches();
 
         return CreatedAtAction(nameof(GetTtsContentByLocale), 
             new { id, locale = content.Locale }, 
@@ -795,9 +795,7 @@ public class PlacesController(
         content.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
-        // ✅ INVALIDATE CACHE
-        cache.Remove($"places:detail:{id}");
-        cache.RemoveByPattern("places:*");
+        await InvalidateAllCaches();
 
         return Ok(new PlaceTtsContentDto
         {
@@ -824,9 +822,7 @@ public class PlacesController(
         db.PlaceTtsContents.Remove(content);
         await db.SaveChangesAsync();
 
-        // ✅ INVALIDATE CACHE
-        cache.Remove($"places:detail:{id}");
-        cache.RemoveByPattern("places:*");
+        await InvalidateAllCaches();
 
         return NoContent();
     }

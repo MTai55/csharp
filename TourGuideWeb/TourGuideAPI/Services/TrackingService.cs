@@ -51,11 +51,14 @@ public class TrackingService(AppDbContext db, IGeoLocationService geo, IConfigur
             AutoDetected = dto.AutoDetected,
             Notes = dto.Notes
         };
+        // Insert visit trước — trả về visitId ngay
         db.VisitHistory.Add(visit);
-        // Tăng TotalVisits
-        await db.Places.Where(p => p.PlaceId == dto.PlaceId)
-            .ExecuteUpdateAsync(s => s.SetProperty(p => p.TotalVisits, p => p.TotalVisits + 1));
         await db.SaveChangesAsync();
+
+        // TotalVisits không critical cho response → fire-and-forget
+        _ = db.Places.Where(p => p.PlaceId == dto.PlaceId)
+            .ExecuteUpdateAsync(s => s.SetProperty(p => p.TotalVisits, p => p.TotalVisits + 1));
+
         return visit;
     }
 
@@ -72,6 +75,7 @@ public class TrackingService(AppDbContext db, IGeoLocationService geo, IConfigur
     public async Task<TripStatsDto> GetTripStatsAsync(int userId)
     {
         var aggregate = await db.VisitHistory
+            .AsNoTracking()
             .Where(v => v.UserId == userId)
             .GroupBy(_ => userId)
             .Select(g => new

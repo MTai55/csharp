@@ -24,6 +24,7 @@ public class GeoLocationService(AppDbContext db, IConfiguration config) : IGeoLo
         var lngDelta = radius / (111.0 * Math.Cos(q.Lat * Math.PI / 180));
 
         var candidates = await db.Places
+            .AsNoTracking()
             .Include(p => p.Category)
             .Include(p => p.Images.Where(i => i.IsMain))
             .Where(p => p.IsApproved && p.IsActive
@@ -51,7 +52,7 @@ public class GeoLocationService(AppDbContext db, IConfiguration config) : IGeoLo
         var q = new NearbyQueryDto(lat, lng, radiusKm, PageSize: 1);
         var nearby = await GetNearbyAsync(q);
         if (!nearby.Any()) return null;
-        return await db.Places.FindAsync(nearby[0].PlaceId);
+        return await db.Places.AsNoTracking().FirstOrDefaultAsync(p => p.PlaceId == nearby[0].PlaceId);
     }
 
     // ── Haversine Formula ─────────────────────────────────────────

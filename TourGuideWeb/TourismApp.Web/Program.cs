@@ -90,6 +90,11 @@ app.MapControllerRoute(
     pattern: "Download",
     defaults: new { controller = "Download", action = "Index" });
 
+app.MapControllerRoute(
+    name: "loadtest",
+    pattern: "LoadTest/{action=Index}",
+    defaults: new { controller = "LoadTest" });
+
 // ── Default routing ───────────────────────────────────────────
 app.MapControllerRoute(
     name: "default",

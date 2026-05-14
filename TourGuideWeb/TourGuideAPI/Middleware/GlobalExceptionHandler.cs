@@ -31,7 +31,7 @@ public class GlobalExceptionHandler : IExceptionHandler
         {
             Status = status,
             Title = title,
-            Detail = exception.Message,
+            Detail = exception.InnerException?.Message ?? exception.Message,
             Instance = context.Request.Path
         }, ct);
 

@@ -1,0 +1,325 @@
+@{
+    ViewData["Title"] = "Load Test";
+    var testFiles = ViewBag.TestFiles as List<string> ?? new();
+    var k6Ok = (bool)(ViewBag.K6Available ?? false);
+}
+
+<div class="max-w-4xl mx-auto space-y-5">
+
+  @* ── Tiêu đề ─────────────────────────────────────────────── *@
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="text-xl font-black text-slate-900">Load Test Runner</h1>
+      <p class="text-sm text-slate-400 mt-0.5">Kiểm tra hiệu suất API với nhiều người dùng đồng thời</p>
+    </div>
+    @if (!k6Ok)
+    {
+      <div class="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
+        <span class="material-symbols-outlined text-red-500 text-sm">error</span>
+        <span class="text-xs font-semibold text-red-600">k6 chưa cài —</span>
+        <code class="text-xs text-red-500">winget install k6</code>
+      </div>
+    }
+    else
+    {
+      <div class="flex items-center gap-1.5 bg-green-50 border border-green-200 rounded-xl px-3 py-2">
+        <span class="material-symbols-outlined text-green-500 text-sm">check_circle</span>
+        <span class="text-xs font-semibold text-green-600">k6 sẵn sàng</span>
+      </div>
+    }
+  </div>
+
+  @* ── INPUT ───────────────────────────────────────────────── *@
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+
+    <div class="px-5 py-3.5 border-b border-slate-100 flex items-center gap-2">
+      <span class="material-symbols-outlined text-orange-500 text-lg">settings</span>
+      <span class="text-sm font-bold text-slate-700">Đầu vào</span>
+    </div>
+
+    <div class="p-5 space-y-5">
+
+      @* Chọn kịch bản *@
+      <div>
+        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Kịch bản test</label>
+        <div id="scenario-cards" class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          @foreach (var f in testFiles)
+          {
+            var isFirst = f == testFiles[0];
+            var label   = f == "poi_concurrent.js" ? "POI Concurrent" : "Heartbeat 100 Devices";
+            var desc    = f == "poi_concurrent.js" ? "Spike 20 VU • Steady 5 VU • Ramp-up 30 VU" : "100 thiết bị ping đồng thời mỗi 5 giây";
+            var icon    = f == "poi_concurrent.js" ? "location_on" : "devices";
+            <button type="button"
+                    onclick="selectScenario(this, '@f')"
+                    data-file="@f"
+                    class="scenario-btn text-left flex items-start gap-3 px-4 py-3 rounded-xl border-2 transition-all
+                           @(isFirst ? "border-orange-400 bg-orange-50" : "border-slate-200 bg-white hover:border-orange-300 hover:bg-orange-50/50")">
+              <span class="material-symbols-outlined text-xl mt-0.5 @(isFirst ? "text-orange-500" : "text-slate-400")">@icon</span>
+              <div>
+                <div class="text-sm font-bold @(isFirst ? "text-orange-700" : "text-slate-700")">@label</div>
+                <div class="text-xs text-slate-400 mt-0.5">@desc</div>
+              </div>
+            </button>
+          }
+          @if (!testFiles.Any())
+          {
+            <p class="text-sm text-slate-400 col-span-2">Không tìm thấy file test trong thư mục tests/k6/</p>
+          }
+        </div>
+        <input type="hidden" id="selected-file" value="@(testFiles.FirstOrDefault() ?? "")" />
+      </div>
+
+      @* API URL + nút chạy *@
+      <div class="flex gap-3 items-end">
+        <div class="flex-1">
+          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">API Base URL</label>
+          <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
+            <span class="material-symbols-outlined text-slate-400 text-sm">link</span>
+            <input id="base-url" type="text" value="http://localhost:5010"
+                   class="flex-1 bg-transparent text-sm font-mono text-slate-700 focus:outline-none"
+                   placeholder="http://localhost:5010" />
+          </div>
+        </div>
+        <button id="btn-run"
+                onclick="startTest()"
+                @(!k6Ok || !testFiles.Any() ? "disabled" : "")
+                class="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold
+                       bg-gradient-to-r from-orange-500 to-orange-400 text-white shadow
+                       hover:from-orange-600 hover:to-orange-500 transition-all
+                       disabled:opacity-40 disabled:cursor-not-allowed">
+          <span class="material-symbols-outlined text-base" id="btn-icon">play_arrow</span>
+          <span id="btn-label">Chạy</span>
+        </button>
+      </div>
+
+      @* Timeline scenarios *@
+      <div id="timeline" class="hidden">
+        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Timeline</label>
+        <div class="relative h-8 bg-slate-100 rounded-full overflow-hidden flex">
+          <div class="flex-none w-[25%] bg-red-400 flex items-center justify-center text-white text-[10px] font-bold">Spike 30s</div>
+          <div class="flex-none w-[32%] bg-blue-400 flex items-center justify-center text-white text-[10px] font-bold">Steady 1m</div>
+          <div class="flex-none w-[43%] bg-violet-400 flex items-center justify-center text-white text-[10px] font-bold">Ramp-up 80s</div>
+        </div>
+        <div class="flex justify-between text-[10px] text-slate-400 mt-1 px-1">
+          <span>0s</span><span>35s</span><span>1m35s</span><span>3m35s</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  @* ── OUTPUT ──────────────────────────────────────────────── *@
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+
+    <div class="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <span class="material-symbols-outlined text-slate-500 text-lg">terminal</span>
+        <span class="text-sm font-bold text-slate-700">Đầu ra</span>
+        <div id="running-badge" class="hidden items-center gap-1.5 ml-2 bg-orange-100 text-orange-600 text-[11px] font-bold px-2 py-0.5 rounded-full">
+          <span class="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse inline-block"></span>
+          Đang chạy
+          <span id="elapsed" class="font-mono">00:00</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <div id="result-badge" class="hidden items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full"></div>
+        <button onclick="clearLog()" class="text-slate-400 hover:text-slate-600 transition-colors" title="Xóa log">
+          <span class="material-symbols-outlined text-lg">delete_sweep</span>
+        </button>
+      </div>
+    </div>
+
+    @* Legend *@
+    <div class="px-5 pt-3 pb-1 border-b border-slate-100 flex flex-wrap gap-3">
+      <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider my-auto">Màu sắc:</span>
+      <span class="text-[11px] font-mono text-green-600 bg-green-50 px-2 py-0.5 rounded">✓ PASS</span>
+      <span class="text-[11px] font-mono text-red-500 bg-red-50 px-2 py-0.5 rounded">✗ FAIL / ERRO</span>
+      <span class="text-[11px] font-mono text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded">⚠ WARN</span>
+      <span class="text-[11px] font-mono text-violet-600 bg-violet-50 px-2 py-0.5 rounded">~ Latency</span>
+      <span class="text-[11px] font-mono text-cyan-600 bg-cyan-50 px-2 py-0.5 rounded">ℹ INFO</span>
+    </div>
+
+    @* Terminal *@
+    <div class="bg-[#0d1117]">
+      <div id="log"
+           class="font-mono text-xs leading-5 px-5 py-4 h-80 overflow-y-auto text-slate-300 space-y-px"
+           style="word-break:break-all">
+        <div class="text-slate-600">▶ Nhấn "Chạy" để bắt đầu test...</div>
+      </div>
+    </div>
+
+    @* Summary bar (hiện sau khi xong) *@
+    <div id="summary" class="hidden p-5 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div class="bg-slate-50 rounded-xl p-3 text-center">
+        <div class="text-xs text-slate-400 font-semibold">Tổng request</div>
+        <div id="s-reqs" class="text-lg font-black text-slate-800 mt-0.5">—</div>
+      </div>
+      <div class="bg-slate-50 rounded-xl p-3 text-center">
+        <div class="text-xs text-slate-400 font-semibold">Tỉ lệ thành công</div>
+        <div id="s-ok" class="text-lg font-black mt-0.5">—</div>
+      </div>
+      <div class="bg-slate-50 rounded-xl p-3 text-center">
+        <div class="text-xs text-slate-400 font-semibold">Avg latency</div>
+        <div id="s-avg" class="text-lg font-black text-slate-800 mt-0.5">—</div>
+      </div>
+      <div class="bg-slate-50 rounded-xl p-3 text-center">
+        <div class="text-xs text-slate-400 font-semibold">p99 latency</div>
+        <div id="s-p99" class="text-lg font-black text-slate-800 mt-0.5">—</div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+@section Scripts {
+<script>
+let evtSource = null, timer = null, seconds = 0;
+let logLines = [];
+
+// ── Chọn scenario ─────────────────────────────────────────────
+function selectScenario(btn, file) {
+  document.querySelectorAll('.scenario-btn').forEach(b => {
+    b.classList.remove('border-orange-400','bg-orange-50');
+    b.classList.add('border-slate-200','bg-white');
+    b.querySelector('.material-symbols-outlined').classList.remove('text-orange-500');
+    b.querySelector('.material-symbols-outlined').classList.add('text-slate-400');
+    b.querySelector('.text-sm').classList.remove('text-orange-700');
+    b.querySelector('.text-sm').classList.add('text-slate-700');
+  });
+  btn.classList.add('border-orange-400','bg-orange-50');
+  btn.classList.remove('border-slate-200','bg-white');
+  btn.querySelector('.material-symbols-outlined').classList.add('text-orange-500');
+  btn.querySelector('.material-symbols-outlined').classList.remove('text-slate-400');
+  btn.querySelector('.text-sm').classList.add('text-orange-700');
+  btn.querySelector('.text-sm').classList.remove('text-slate-700');
+  document.getElementById('selected-file').value = file;
+  document.getElementById('timeline').classList.toggle('hidden', file !== 'poi_concurrent.js');
+}
+// hiện timeline nếu file đầu tiên là poi_concurrent
+(function() {
+  const f = document.getElementById('selected-file').value;
+  if (f === 'poi_concurrent.js') document.getElementById('timeline').classList.remove('hidden');
+})();
+
+// ── Chạy test ─────────────────────────────────────────────────
+function startTest() {
+  if (evtSource) { evtSource.close(); evtSource = null; }
+  const file    = document.getElementById('selected-file').value;
+  const baseUrl = document.getElementById('base-url').value.trim();
+  if (!file) return;
+
+  clearLog();
+  document.getElementById('summary').classList.add('hidden');
+  document.getElementById('result-badge').classList.add('hidden');
+  document.getElementById('result-badge').classList.remove('flex');
+
+  // Running state
+  document.getElementById('running-badge').classList.remove('hidden');
+  document.getElementById('running-badge').classList.add('flex');
+  document.getElementById('btn-run').disabled = true;
+  document.getElementById('btn-icon').textContent = 'hourglass_top';
+  document.getElementById('btn-label').textContent = 'Đang chạy...';
+
+  seconds = 0;
+  clearInterval(timer);
+  timer = setInterval(() => {
+    seconds++;
+    const m = String(Math.floor(seconds/60)).padStart(2,'0');
+    const s = String(seconds%60).padStart(2,'0');
+    document.getElementById('elapsed').textContent = m + ':' + s;
+  }, 1000);
+
+  logLines = [];
+  const url = `/LoadTest/Run?file=${encodeURIComponent(file)}&baseUrl=${encodeURIComponent(baseUrl)}`;
+  evtSource = new EventSource(url);
+  evtSource.addEventListener('start', e => appendLog(e.data, 'cyan', true));
+  evtSource.addEventListener('log',   e => { logLines.push(e.data); appendLog(e.data); });
+  evtSource.addEventListener('done',  e => onDone(e.data));
+  evtSource.onerror = ()  => onDone('FAIL');
+}
+
+function onDone(result) {
+  clearInterval(timer);
+  if (evtSource) { evtSource.close(); evtSource = null; }
+
+  document.getElementById('running-badge').classList.add('hidden');
+  document.getElementById('running-badge').classList.remove('flex');
+  document.getElementById('btn-run').disabled = false;
+  document.getElementById('btn-icon').textContent = 'replay';
+  document.getElementById('btn-label').textContent = 'Chạy lại';
+
+  const pass = result === 'PASS';
+  const badge = document.getElementById('result-badge');
+  badge.className = `flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full ${pass ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`;
+  badge.innerHTML = `<span class="material-symbols-outlined text-sm">${pass ? 'check_circle' : 'cancel'}</span>${pass ? 'ALL PASS' : 'THRESHOLD FAIL'}`;
+  badge.classList.remove('hidden');
+  badge.classList.add('flex');
+
+  parseSummary();
+}
+
+// ── Trích xuất metrics từ log ─────────────────────────────────
+function parseSummary() {
+  const text = logLines.join('\n');
+
+  // Tong request
+  const reqs = text.match(/http_reqs[\s.]*:\s*([\d]+)/)?.[1] ?? '?';
+
+  // HTTP fail rate (so thap tot): lay tu dong "http_req_failed...: X.XX% ..."
+  const failLine = text.match(/http_req_failed[\s.]*:[\s]*([\d.]+)%/);
+  const failPct  = failLine ? parseFloat(failLine[1]) : null;
+  const okPct    = failPct != null ? (100 - failPct).toFixed(1) + '%' : '?';
+
+  // Avg latency tu http_req_duration
+  const avg = text.match(/http_req_duration[\s.]*:[\s\S]*?avg=([\w.µ]+)/)?.[1] ?? '?';
+
+  // p99 tu dong threshold: "p(99) < 2000' p(99)=Xs"
+  const p99m = text.match(/'p\(99\)[^']*'\s+p\(99\)=([\w.]+)/);
+  const p99  = p99m ? p99m[1] : (text.match(/checkin_duration_ms[\s\S]*?p\(99\)=([\w.]+)/)?.[1] ?? 'N/A');
+
+  document.getElementById('s-reqs').textContent = reqs;
+  document.getElementById('s-ok').textContent   = okPct;
+  document.getElementById('s-ok').className     = `text-lg font-black mt-0.5 ${failPct == null || failPct > 5 ? 'text-red-600' : 'text-green-600'}`;
+  document.getElementById('s-avg').textContent  = avg;
+  document.getElementById('s-p99').textContent  = p99;
+  document.getElementById('summary').classList.remove('hidden');
+}
+
+// ── Render dòng log ───────────────────────────────────────────
+function appendLog(line, forceColor, bold) {
+  const log = document.getElementById('log');
+  const placeholder = log.querySelector('.text-slate-600');
+  if (placeholder) placeholder.remove();
+
+  const div = document.createElement('div');
+  if (bold) div.style.fontWeight = '700';
+
+  if (forceColor) {
+    div.className = `text-${forceColor}-400`;
+    div.textContent = line;
+  } else {
+    div.innerHTML = colorize(line);
+  }
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+}
+
+function colorize(line) {
+  const e = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  if (/✓|PASS|\[OK\]/.test(line))                    return `<span class="text-green-400">${e(line)}</span>`;
+  if (/✗|FAIL|ERRO/.test(line))                       return `<span class="text-red-400">${e(line)}</span>`;
+  if (/WARN|\[--\]/.test(line))                        return `<span class="text-yellow-400">${e(line)}</span>`;
+  if (/INFO|setup|teardown|\[setup\]/.test(line))      return `<span class="text-cyan-400">${e(line)}</span>`;
+  if (/p\(\d+\)|avg=|min=|med=|max=/.test(line))      return `<span class="text-violet-400">${e(line)}</span>`;
+  if (/={3,}|-{3,}|─{3,}/.test(line))                 return `<span class="text-slate-500">${e(line)}</span>`;
+  if (/scenarios:|execution:|script:|output:/.test(line)) return `<span class="text-sky-400">${e(line)}</span>`;
+  return `<span class="text-slate-300">${e(line)}</span>`;
+}
+
+function clearLog() {
+  document.getElementById('log').innerHTML = '<div class="text-slate-600">▶ Nhấn "Chạy" để bắt đầu test...</div>';
+  logLines = [];
+}
+</script>
+}

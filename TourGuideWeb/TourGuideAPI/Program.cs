@@ -18,7 +18,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"),
+        npgsql => npgsql.MaxBatchSize(1)));
 
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IGeoLocationService, GeoLocationService>();
@@ -63,11 +64,17 @@ builder.Services.AddSignalR();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddOpenApi();
 builder.Services.AddHttpClient();
+builder.Services.AddOutputCache(opt =>
+{
+    opt.AddPolicy("places", p => p.Expire(TimeSpan.FromSeconds(60)).Tag("places"));
+    opt.AddPolicy("place",  p => p.Expire(TimeSpan.FromSeconds(60)).Tag("places"));
+});
 
 var app = builder.Build();
 
 app.UseExceptionHandler();
 app.UseCors("AllowAll");
+app.UseOutputCache();
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
