@@ -84,6 +84,12 @@ app.MapAreaControllerRoute(
     areaName: "Admin",
     pattern: "Admin/{controller=Dashboard}/{action=Index}/{id?}");
 
+// ── Download page (explicit route — default template dùng action=Login) ──
+app.MapControllerRoute(
+    name: "download",
+    pattern: "Download",
+    defaults: new { controller = "Download", action = "Index" });
+
 // ── Default routing ───────────────────────────────────────────
 app.MapControllerRoute(
     name: "default",

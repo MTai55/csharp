@@ -1,0 +1,117 @@
+@model TourismApp.Web.Controllers.DownloadPageViewModel
+
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tải TourGuide App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        gold: '#C8A96E',
+                        'dark-bg': '#0F0E0D',
+                        'dark-surface': '#1A1410',
+                        'dark-surface2': '#26201A',
+                        'dark-border': '#2A2018',
+                        'dark-text': '#F0E6D3',
+                        'dark-muted': '#5A4A3A',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-dark-bg text-dark-text min-h-screen flex flex-col items-center justify-center px-4 py-12 font-sans">
+
+    <!-- Logo / Header -->
+    <div class="text-center mb-10">
+        <div class="text-5xl mb-3">🗺️</div>
+        <h1 class="text-3xl font-bold text-gold">TourGuide</h1>
+        <p class="text-dark-muted mt-2 text-sm">Khám phá TP.HCM thông minh hơn</p>
+    </div>
+
+    <!-- QR Card -->
+    <div class="bg-dark-surface border border-dark-border rounded-2xl p-8 text-center w-full max-w-sm shadow-xl">
+        <p class="text-sm text-dark-muted mb-5" id="platformMsg">Quét mã QR để tải app</p>
+
+        <!-- QR Code Canvas -->
+        <div class="bg-white p-4 rounded-xl inline-block mb-5">
+            <div id="qrcode"></div>
+        </div>
+
+        <p class="text-xs text-dark-muted mb-6" id="qrHint">Hoặc nhấn nút bên dưới</p>
+
+        <!-- Nút tải -->
+        <div class="space-y-3" id="downloadBtns">
+            @if (!string.IsNullOrEmpty(Model.GooglePlayUrl) && Model.GooglePlayUrl != "#")
+            {
+                <a href="@Model.GooglePlayUrl" target="_blank"
+                   class="flex items-center justify-center gap-3 w-full py-3 px-5 bg-gold text-dark-bg font-bold rounded-xl hover:opacity-90 transition">
+                    <span class="text-xl">▶</span>
+                    <span>Tải trên Google Play</span>
+                </a>
+            }
+            @if (!string.IsNullOrEmpty(Model.ApkDirectUrl) && Model.ApkDirectUrl != "#")
+            {
+                <a href="@Model.ApkDirectUrl" download
+                   class="flex items-center justify-center gap-3 w-full py-3 px-5 bg-dark-surface2 border border-dark-border text-dark-text font-semibold rounded-xl hover:border-gold transition">
+                    <span class="text-xl">⬇</span>
+                    <span>Tải file APK trực tiếp</span>
+                </a>
+            }
+            @if ((string.IsNullOrEmpty(Model.GooglePlayUrl) || Model.GooglePlayUrl == "#") &&
+                 (string.IsNullOrEmpty(Model.ApkDirectUrl) || Model.ApkDirectUrl == "#"))
+            {
+                <p class="text-dark-muted text-sm">App chưa được phát hành công khai.</p>
+            }
+        </div>
+    </div>
+
+    <!-- Thông tin -->
+    <div class="mt-8 text-center text-xs text-dark-muted space-y-1">
+        <p>Android @Model.AndroidMinVersion • ~@Model.AndroidSize</p>
+        <p>Yêu cầu: GPS, Microphone, Internet</p>
+    </div>
+
+    <!-- Back link -->
+    <a href="/" class="mt-8 text-xs text-dark-muted hover:text-gold underline transition">← Về trang chủ</a>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script>
+        const googlePlayUrl = '@Html.Raw(Model.GooglePlayUrl)';
+        const apkUrl        = '@Html.Raw(Model.ApkDirectUrl)';
+        const ua            = navigator.userAgent;
+
+        let qrTarget = googlePlayUrl || apkUrl || window.location.href;
+        let msg      = 'Quét mã QR để tải app';
+
+        if (/android/i.test(ua)) {
+            msg = '📱 Android — quét QR để mở Google Play';
+            qrTarget = googlePlayUrl || apkUrl || window.location.href;
+        } else if (/iphone|ipad|ipod/i.test(ua)) {
+            msg = '📱 iOS — quét QR để mở App Store';
+            qrTarget = '@Html.Raw(Model.AppStoreUrl)' || window.location.href;
+        } else {
+            msg = '💻 Mở trang này trên điện thoại để quét QR';
+        }
+
+        document.getElementById('platformMsg').textContent = msg;
+
+        new QRCode(document.getElementById('qrcode'), {
+            text: qrTarget || window.location.href,
+            width: 200,
+            height: 200,
+            colorDark: '#000000',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.H
+        });
+    </script>
+</body>
+</html>

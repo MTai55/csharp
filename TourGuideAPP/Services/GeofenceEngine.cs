@@ -35,7 +35,9 @@ public class GeofenceEngine
                 GetDistance(userLat, userLon, p.Latitude, p.Longitude) <= (p.Radius ?? 50) &&
                 (p.LastPlayedAt == null ||
                  (DateTime.Now - p.LastPlayedAt.Value).TotalMinutes >= (p.CooldownMinutes ?? 30)))
-            .OrderBy(p => p.PlaceId)
+            .OrderByDescending(p => p.Priority ?? 1)
+            .ThenBy(p => GetDistance(userLat, userLon, p.Latitude, p.Longitude))
+            .ThenBy(p => p.PlaceId)
             .ToList();
 
         if (candidates.Count == 0)

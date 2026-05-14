@@ -409,17 +409,17 @@ public partial class MapPage : ContentPage
                 var address = await _locationService.GetAddressAsync(location);
                 CurrentAddressLabel.Text = $"📍 {address}";
 
+                // Khi đang chỉ đường, không chạy geofence để debounce không tick ngầm
+                if (CancelRoutePanel.IsVisible)
+                    return;
+
                 var places = _placeService.GetCachedPlaces();
                 System.Diagnostics.Debug.WriteLine($"[GPS] 📍 {location.Latitude:F6},{location.Longitude:F6} | places={places.Count}");
 
                 var nearest = _geofenceEngine.FindNearestPOI(
                     location.Latitude, location.Longitude, places);
 
-                System.Diagnostics.Debug.WriteLine($"[GPS] nearest={(nearest?.Name ?? "null")} | cancelRoute={CancelRoutePanel.IsVisible}");
-
-                // Khi đang chỉ đường, không cho GPS callback ghi đè label
-                if (CancelRoutePanel.IsVisible)
-                    return;
+                System.Diagnostics.Debug.WriteLine($"[GPS] nearest={(nearest?.Name ?? "null")}");
 
                 if (nearest != null)
                 {
