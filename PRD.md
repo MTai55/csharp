@@ -1424,7 +1424,30 @@ classDiagram
 
 ### 13.4 Sequence Diagrams — Mobile App
 
-#### 13.4.1 Onboarding & Truy cập (UC1, UC2, UC11, UC12, UC13)
+#### 13.4.1 App Lifecycle & Heartbeat
+
+```mermaid
+sequenceDiagram
+    participant App
+    participant ASS as AccessSessionService
+    participant Supabase
+
+    Note over App: App khởi động / OnResume
+    App->>ASS: StartHeartbeatTimer()
+    ASS->>Supabase: UpdateLastSeenAsync() [ngay lập tức]
+    loop Mỗi 5s (foreground)
+        ASS->>Supabase: UpdateLastSeenAsync()
+    end
+
+    Note over App: App vào background (OnSleep)
+    App->>ASS: StopHeartbeat()
+    ASS->>ASS: Cancel heartbeat CTS
+    Note over Supabase: LastSeenAt ngừng cập nhật<br/>Web detect offline sau ~30s (15s threshold + 15s page reload)
+```
+
+---
+
+#### 13.4.2 Onboarding & Truy cập (UC1, UC2, UC11, UC12, UC13)
 
 ```mermaid
 sequenceDiagram
@@ -1440,11 +1463,11 @@ sequenceDiagram
 
     User->>App: Mở ứng dụng
     App->>ASS: RegisterDeviceAsync() [fire-and-forget]
-    ASS->>Supabase: UPSERT DeviceRegistrations {DeviceId, Platform, FirstSeenAt, LastSeenAt}
-    App->>ASS: StartHeartbeatTimer() [cập nhật LastSeenAt ngay + mỗi 5s]
+    ASS->>Supabase: UpsertDeviceRegistration(deviceId, platform)
+    App->>ASS: StartHeartbeatTimer()
 
     App->>ASS: IsAccessValid()
-    ASS->>Prefs: Get("access_expires_at")
+    ASS->>Prefs: GetExpiresAt()
     alt Session còn hạn
         ASS-->>App: true
         App->>Shell: new AppShell()
@@ -1456,7 +1479,7 @@ sequenceDiagram
     end
 
     SubPage->>ASS: GetPackagesAsync()
-    ASS->>Supabase: SELECT AccessPackages WHERE IsActive=true ORDER BY SortOrder
+    ASS->>Supabase: GetActivePackagesAsync()
     alt DB OK
         Supabase-->>ASS: Packages[]
     else Lỗi DB
@@ -1467,21 +1490,20 @@ sequenceDiagram
     User->>SubPage: Chọn gói (vd: "2h - 18.000đ")
     SubPage->>QRPage: Navigate(AccessPackage)
     QRPage->>ASS: CreatePendingSessionAsync(packageId, durationHours, priceVnd)
-    ASS->>Supabase: INSERT AccessSessions {DeviceId, PackageId, IsActive=false}
-    Supabase-->>ASS: SessionId (uuid)
-    ASS->>Prefs: Set("access_session_id", sessionId)
+    ASS->>Supabase: InsertPendingSession(dto)
+    Supabase-->>ASS: sessionId
+    ASS->>Prefs: SaveSessionId(sessionId)
     QRPage-->>User: Hiện QR VietQR (VIB, 310822005, memo=DeviceId)
     QRPage->>ASS: StartPollingForActivation(sessionId) [poll 5s]
 
     User->>User: Chuyển khoản ngân hàng
-    Admin->>Supabase: POST /api/admin/sessions/{id}/activate
-    Note over Supabase: IsActive=true, ActivatedAt=now, ExpiresAt=now+DurationHours
+    Admin->>Supabase: ActivateSession(sessionId)
 
     loop Poll mỗi 5s
-        ASS->>Supabase: SELECT AccessSessions WHERE SessionId=id
+        ASS->>Supabase: GetSessionStatusAsync(sessionId)
         Supabase-->>ASS: {IsActive, ExpiresAt}
     end
-    ASS->>Prefs: Set("access_expires_at", expiresAt)
+    ASS->>Prefs: SaveExpiresAt(expiresAt)
     ASS->>Shell: Application.Current.MainPage = new AppShell()
     Shell-->>User: Vào giao diện chính
 
@@ -1489,15 +1511,14 @@ sequenceDiagram
         ASS->>ASS: IsAccessValid()
         alt Hết hạn
             ASS->>App: AccessExpired event
-            App-->>User: Alert "Gói đã hết hạn"
-            App-->>User: LanguageSelectionPage
+            App-->>User: Alert → LanguageSelectionPage
         end
     end
 ```
 
 ---
 
-#### 13.4.2 Bản đồ & POI & Chỉ đường (UC3, UC4)
+#### 13.4.3 Bản đồ & POI & Chỉ đường (UC3, UC4)
 
 ```mermaid
 sequenceDiagram
@@ -1510,38 +1531,38 @@ sequenceDiagram
 
     MapPage->>PlaceService: GetCachedPlaces()
     PlaceService-->>MapPage: places[]
-    MapPage->>Mapsui: Vẽ POIsGlow + POIs layers (SkiaSharp marker đỏ)
+    MapPage->>Mapsui: DrawPOILayers(places)
     MapPage-->>User: Bản đồ CartoDB Voyager với marker POI
 
     User->>Mapsui: Tap marker POI
-    Mapsui->>MapPage: OnMapInfo(feature["id"])
-    MapPage->>PlaceService: GetCachedPlaces().FirstOrDefault(p.PlaceId == id)
+    Mapsui->>MapPage: OnMapInfo(featureId)
+    MapPage->>PlaceService: FindById(placeId)
     PlaceService-->>MapPage: Place
-    MapPage-->>User: Bottom card: tên, status mở/đóng, rating, địa chỉ, tags, giờ
+    MapPage-->>User: Bottom card: tên, status, rating, địa chỉ, tags, giờ
 
     User->>MapPage: Tap "Chỉ đường"
-    MapPage->>LS: LastKnownLocation
+    MapPage->>LS: GetLastKnownLocation()
     LS-->>MapPage: (userLat, userLon)
-    MapPage->>OSRM: GET /route/v1/driving/{origin};{dest}?overview=full&amp;geometries=geojson
+    MapPage->>OSRM: GetRouteAsync(origin, dest)
     OSRM-->>MapPage: GeoJSON polyline
-    MapPage->>Mapsui: Vẽ "Route" layer (#E94560) + "Destination" marker
-    MapPage->>Mapsui: Zoom to route bounds
+    MapPage->>Mapsui: DrawRouteLayer(polyline)
+    MapPage->>Mapsui: ZoomToRouteBounds()
     MapPage->>MapPage: CancelRoutePanel.IsVisible = true
-    MapPage-->>User: Đường đi hiển thị + nút Hủy
+    MapPage-->>User: Đường đi + nút Hủy
 
     User->>MapPage: Tap "Hủy route"
-    MapPage->>Mapsui: Xóa layer "Route" + "Destination"
+    MapPage->>Mapsui: RemoveLayer("Route", "Destination")
     MapPage->>MapPage: CancelRoutePanel.IsVisible = false
     MapPage-->>User: Bản đồ bình thường
 
-    Note over MapPage,OSRM: Chỉ đường từ PlaceDetailPage hoặc TourDetailPage
-    MapPage->>MapPage: OnAppearing → đọc PendingRoute (static)
-    MapPage->>OSRM: GET /route/v1/driving/...
+    Note over MapPage,OSRM: Chỉ đường từ PlaceDetailPage / TourDetailPage
+    MapPage->>MapPage: OnAppearing() → ReadPendingRoute()
+    MapPage->>OSRM: GetRouteAsync(origin, dest)
     OSRM-->>MapPage: Polyline
     MapPage-->>User: Route + CancelRoutePanel
 ```
 
-#### 13.4.3 TTS tự động — Geofence (UC5, UC14, UC15)
+#### 13.4.4 TTS tự động — Geofence (UC5, UC14, UC15)
 
 ```mermaid
 sequenceDiagram
@@ -1554,63 +1575,60 @@ sequenceDiagram
     participant Supabase
 
     OS->>LS: GPS update (Android FG Service / iOS polling 3s)
-    LS->>MapPage: LocationChanged event (lat, lon)
+    LS->>MapPage: LocationChanged(lat, lon)
     Note over MapPage: _gpsStarted flag — chỉ 1 handler duy nhất
 
     MapPage->>MapPage: UpdateUserMarker(lat, lon)
     MapPage->>LS: GetAddressAsync() [cache 15s / dưới 30m bỏ qua]
-    LS-->>MapPage: Địa chỉ hiện tại
+    LS-->>MapPage: address
 
     alt CancelRoutePanel.IsVisible == true
-        MapPage->>MapPage: return early (đang chỉ đường)
+        MapPage->>MapPage: return early
     else
         MapPage->>GE: FindNearestPOI(lat, lon, cachedPlaces)
 
-        alt candidates rỗng (ngoài radius hoặc đang cooldown)
-            GE->>GE: reset _pendingPlaceId
+        alt candidates rỗng
+            GE->>GE: ResetDebounce()
             GE-->>MapPage: null
             alt _lastSpokenPlace != null
                 MapPage->>GE: GetDistance(user, _lastSpokenPlace)
-                alt dist > Radius → user đã rời đi
-                    MapPage->>MapPage: _lastSpokenPlaceId = null
-                    MapPage->>MapPage: _lastSpokenPlace = null
-                else dist <= Radius → cooldown đang active
-                    MapPage->>MapPage: giữ nguyên _lastSpokenPlaceId
+                alt dist > Radius
+                    MapPage->>MapPage: ClearLastSpoken()
+                else dist <= Radius
+                    MapPage->>MapPage: KeepLastSpoken() [cooldown active]
                 end
             end
         else candidates có POI
-            GE->>GE: top = sort Priority DESC → Distance ASC → PlaceId ASC
+            GE->>GE: SortCandidates() [Priority DESC → Distance ASC → PlaceId ASC]
             alt POI mới khác _pendingPlaceId
-                GE->>GE: _pendingPlaceId = topId, _pendingFirstSeenAt = now
-                GE-->>MapPage: null (chờ debounce 2s)
+                GE->>GE: StartDebounce(topId)
+                GE-->>MapPage: null
             else elapsed < 2000ms
                 GE-->>MapPage: null
             else elapsed >= 2000ms
-                GE-->>MapPage: Place (đủ debounce)
+                GE-->>MapPage: Place
             end
         end
 
         alt nearest != null && nearest.PlaceId != _lastSpokenPlaceId
-            MapPage->>MapPage: _lastSpokenPlaceId = nearestId
-            MapPage->>MapPage: _lastSpokenPlace = nearest
-            MapPage->>MapPage: nearest.LastPlayedAt = DateTime.Now
+            MapPage->>MapPage: SetLastSpoken(nearest)
             MapPage->>NS: SpeakFromGpsAsync(place.GetScriptForLocale(locale))
             alt (now - _lastGpsTtsAt) < 60s
-                NS-->>MapPage: return (global GPS cooldown)
+                NS-->>MapPage: return [global GPS cooldown]
             else
-                NS->>NS: _lastGpsTtsAt = now → TTS phát audio
+                NS->>NS: PlayTTS(text)
             end
             MapPage->>UPS: AddHistoryByGpsAsync(nearest)
-            UPS->>UPS: AddHistoryAsync(place, "GPS") [local Prefs, max 100]
-            UPS->>Supabase: INSERT DevicePoiVisits {DeviceId, PlaceId, "GPS", now}
-            Note over Supabase: Trigger on_device_poi_visit_insert → Places.TotalVisits++
+            UPS->>UPS: AddHistoryAsync(place, "GPS") [local Prefs]
+            UPS->>Supabase: RecordDevicePoiVisitAsync(place, "GPS")
+            Note over Supabase: Trigger → Places.TotalVisits++
         end
     end
 ```
 
 ---
 
-#### 13.4.4 Khám phá địa điểm (UC6, UC7)
+#### 13.4.5 Khám phá địa điểm (UC6, UC7)
 
 ```mermaid
 sequenceDiagram
@@ -1623,28 +1641,28 @@ sequenceDiagram
     participant MapPage
 
     MainPage->>PlaceService: GetAllPlacesAsync()
-    PlaceService->>Supabase: SELECT Places
-    PlaceService->>Supabase: SELECT PlaceImages WHERE IsMain=true
-    PlaceService->>Supabase: SELECT PlaceTtsContents
+    PlaceService->>Supabase: GetPlacesAsync()
+    PlaceService->>Supabase: GetMainImagesAsync()
+    PlaceService->>Supabase: GetTtsContentsAsync()
     Supabase-->>PlaceService: Places + Images + TtsContents
     PlaceService-->>MainPage: _cachedPlaces
     MainPage-->>User: Danh sách (ảnh, tên, rating, giá, giờ mở/đóng)
 
     User->>MainPage: Nhập từ khoá tìm kiếm
-    MainPage->>MainPage: Filter Name / Address / Specialty.Contains
+    MainPage->>MainPage: FilterByText(query)
     MainPage-->>User: Kết quả realtime
 
     User->>MainPage: Chọn chip danh mục
-    MainPage->>MainPage: Filter theo chip
+    MainPage->>MainPage: FilterByCategory(categoryId)
     MainPage-->>User: Danh sách đã lọc
 
     User->>MainPage: Tap vào địa điểm
-    MainPage->>PDP: Navigate(Place, services)
-    PDP-->>User: Gallery ảnh, địa chỉ, giờ mở/đóng, giá, mô tả, tags, TTS script
+    MainPage->>PDP: Navigate(place, services)
+    PDP-->>User: Gallery ảnh, địa chỉ, giờ mở/đóng, giá, mô tả, tags
 
     User->>PDP: Tap "Nghe thuyết minh"
     PDP->>NS: SpeakAsync(place.GetScriptForLocale(locale))
-    NS->>NS: TTS phát audio
+    NS->>NS: PlayTTS(text)
 
     User->>PDP: Tap "Gọi điện"
     PDP->>PDP: PhoneDialer.Open(phone)
@@ -1656,7 +1674,45 @@ sequenceDiagram
 
 ---
 
-#### 13.4.5 Tour có sẵn (UC8)
+#### 13.4.6 QR Check-in (UC Ghi nhận lượt ghé POI)
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant QRScanPage
+    participant ZXing as ZXing.Net.MAUI
+    participant PlaceService
+    participant UPS as UserProfileService
+    participant NS as NarrationService
+    participant Supabase
+
+    User->>QRScanPage: Mở QRScanPage
+    QRScanPage->>ZXing: StartScanning()
+    ZXing-->>QRScanPage: OnBarcodesDetected(rawValue)
+    QRScanPage->>QRScanPage: int.TryParse(rawValue)
+
+    alt rawValue là PlaceId hợp lệ
+        QRScanPage->>PlaceService: FindById(placeId)
+        PlaceService-->>QRScanPage: Place
+        QRScanPage->>UPS: AddHistoryByQRAsync(place)
+        UPS->>UPS: AddHistoryAsync(place, "QR") [local Prefs]
+        UPS->>Supabase: RecordDevicePoiVisitAsync(place, "QR")
+        Note over Supabase: Trigger → Places.TotalVisits++
+        QRScanPage->>NS: SpeakAsync(place.GetScriptForLocale(locale))
+        NS->>NS: PlayTTS(text)
+        QRScanPage-->>User: Toast "Check-in: {Name}"
+    else rawValue là text thường
+        QRScanPage->>NS: SpeakAsync(rawValue)
+        QRScanPage-->>User: Hiển thị nội dung QR
+    end
+
+    QRScanPage->>QRScanPage: delay 3s
+    ZXing->>ZXing: Tiếp tục scan
+```
+
+---
+
+#### 13.4.7 Tour có sẵn (UC8)
 
 ```mermaid
 sequenceDiagram
@@ -1669,8 +1725,8 @@ sequenceDiagram
 
     User->>ToursPage: Mở tab Tour
     ToursPage->>PlaceService: GetAllPlacesAsync()
-    PlaceService-->>ToursPage: Places[]
-    ToursPage->>ToursPage: Lọc IsActive && IsApproved
+    PlaceService-->>ToursPage: places[]
+    ToursPage->>ToursPage: FilterApproved(places)
     ToursPage->>ToursPage: RebuildTours() → 3 TourCard (quick 2/balanced 3/full 4 stops)
     ToursPage-->>User: 3 tour card với tags, budget, stops, duration
 
@@ -1699,7 +1755,7 @@ sequenceDiagram
 
 ---
 
-#### 13.4.6 Tài khoản Mobile (UC9, UC10)
+#### 13.4.8 Tài khoản Mobile (UC9, UC10)
 
 ```mermaid
 sequenceDiagram
@@ -1711,19 +1767,19 @@ sequenceDiagram
 
     User->>AccountPage: Mở tab Tài khoản
     AccountPage->>UPS: GetTripHistoryAsync()
-    UPS->>Prefs: Get("trip_history") → deserialize JSON
+    UPS->>Prefs: LoadHistory()
     Prefs-->>UPS: List~TripHistoryItem~
-    UPS-->>AccountPage: Tối đa 30 items gần nhất
+    UPS-->>AccountPage: 30 items gần nhất
     AccountPage-->>User: Danh sách lịch sử (tên, method GPS/QR, thời gian)
 
     User->>AccountPage: Chọn ngôn ngữ TTS (Picker)
-    AccountPage->>NS: PreferredLocale = selectedLocale
-    NS->>Prefs: Set("tts_preferred_locale", locale)
+    AccountPage->>NS: SetPreferredLocale(locale)
+    NS->>Prefs: SaveLocale(locale)
     AccountPage-->>User: Xác nhận đã đổi ngôn ngữ TTS
 
     User->>AccountPage: Tap "Xóa lịch sử"
     AccountPage->>UPS: ClearHistoryAsync()
-    UPS->>Prefs: Remove("trip_history")
+    UPS->>Prefs: RemoveHistory()
     AccountPage-->>User: Danh sách trống
 ```
 
@@ -1746,16 +1802,16 @@ sequenceDiagram
     User->>AuthMVC: POST /Auth/Register {fullName, email, password}
     AuthMVC->>API: RegisterAsync(dto)
     API->>AuthAPI: POST /api/auth/register
-    AuthAPI->>DB: SELECT User WHERE Email = email
+    AuthAPI->>DB: FindUserByEmail(email)
     alt Email đã tồn tại
         AuthAPI-->>AuthMVC: 400
         AuthMVC-->>User: "Email đã được sử dụng"
     else OK
         AuthAPI->>AuthAPI: BCrypt.HashPassword(password)
-        AuthAPI->>DB: INSERT User {Role="Owner", IsActive=true}
-        AuthAPI->>AuthAPI: GenerateJwt(user, 15min) + INSERT RefreshToken (7 ngày)
+        AuthAPI->>DB: CreateUser(dto) [Role="Owner"]
+        AuthAPI->>AuthAPI: GenerateTokenPair(user) [access 15min + refresh 7d]
         AuthAPI-->>API: 200 {accessToken, refreshToken}
-        AuthMVC->>AuthMVC: Lưu token + userInfo vào Session
+        AuthMVC->>AuthMVC: SaveTokenToSession(tokens)
         AuthMVC-->>User: Redirect /Dashboard
     end
 
@@ -1764,14 +1820,15 @@ sequenceDiagram
     User->>AuthMVC: POST /Auth/Login {email, password}
     AuthMVC->>API: LoginAsync(dto)
     API->>AuthAPI: POST /api/auth/login
-    AuthAPI->>DB: SELECT User WHERE Email = email
+    AuthAPI->>DB: FindUserByEmail(email)
     alt Sai thông tin / tài khoản bị khóa
         AuthAPI-->>AuthMVC: 401
         AuthMVC-->>User: "Email hoặc mật khẩu không đúng"
     else OK
-        AuthAPI->>AuthAPI: BCrypt.Verify + GenerateJwt + INSERT RefreshToken
+        AuthAPI->>AuthAPI: BCrypt.Verify(password, hash)
+        AuthAPI->>AuthAPI: GenerateTokenPair(user)
         AuthAPI-->>API: 200 {accessToken, refreshToken, role}
-        AuthMVC->>AuthMVC: Lưu token + role vào Session
+        AuthMVC->>AuthMVC: SaveTokenToSession(tokens, role)
         alt Role = Admin
             AuthMVC-->>User: Redirect /Admin/AdminDashboard
         else Role = Owner
@@ -1796,12 +1853,12 @@ sequenceDiagram
     Admin->>DashMVC: GET /Admin/AdminDashboard [AdminOnly]
     DashMVC->>API: GetAdminStatsAsync()
     API->>AnalyticsAPI: GET /api/analytics/admin/stats [JWT AdminOnly]
-    AnalyticsAPI->>DB: GROUP users → COUNT Total + Owners (1 query)
-    AnalyticsAPI->>DB: GROUP places IsActive → COUNT Total/Pending/Active + AVG Rating (1 query)
-    AnalyticsAPI->>DB: GROUP reviews → COUNT Total + Hidden (1 query)
-    AnalyticsAPI->>DB: COUNT DeviceRegistrations WHERE LastSeenAt >= UtcNow-15s
-    DB-->>AnalyticsAPI: Aggregated results
-    AnalyticsAPI-->>API: {TotalUsers, TotalOwners, TotalPlaces, PendingPlaces, ActivePlaces, TotalReviews, HiddenReviews, OnlineDevices, AvgRating}
+    AnalyticsAPI->>DB: CountUserStats()
+    AnalyticsAPI->>DB: CountPlaceStats()
+    AnalyticsAPI->>DB: CountReviewStats()
+    AnalyticsAPI->>DB: CountOnlineDevices()
+    DB-->>AnalyticsAPI: AdminStatsDto
+    AnalyticsAPI-->>API: {TotalUsers, TotalOwners, TotalPlaces, PendingPlaces, TotalReviews, OnlineDevices, AvgRating}
     API-->>DashMVC: AdminStatsViewModel
     DashMVC-->>Admin: Cards thống kê (Users, Places, Reviews, Devices online)
 
@@ -1809,9 +1866,9 @@ sequenceDiagram
     Admin->>DashMVC: GET /Admin/AdminDashboard/Map
     DashMVC->>API: GetAdminPlacesAsync(pendingOnly=false)
     API->>AdminAPI: GET /api/admin/places [JWT AdminOnly]
-    AdminAPI->>DB: SELECT Places + Category + Images + Owner (toàn bộ, có phân trang)
+    AdminAPI->>DB: GetAllPlacesAsync(filters)
     DB-->>API: places[]
-    API-->>DashMVC: List<PlaceViewModel>
+    API-->>DashMVC: List~PlaceViewModel~
     DashMVC-->>Admin: Bản đồ tất cả địa điểm trong hệ thống
 ```
 
@@ -1830,62 +1887,58 @@ sequenceDiagram
 
     Owner->>PlacesMVC: GET /Places
     PlacesMVC->>API: GET /api/places/mine (paginated)
-    PlacesAPI->>DB: SELECT Places WHERE OwnerId = me
-    DB-->>PlacesMVC: Places[]
+    PlacesAPI->>DB: GetMyPlacesAsync(ownerId, search, page)
+    DB-->>PlacesMVC: places[]
     PlacesMVC-->>Owner: Danh sách địa điểm
 
     Owner->>PlacesMVC: GET /Places/Create
     PlacesMVC-->>Owner: Form tạo địa điểm mới
 
-    Owner->>PlacesMVC: POST /Places/Create {Name, Address, Lat, Lon, Phone, ...}
+    Owner->>PlacesMVC: POST /Places/Create {Name, Address, Lat, Lon, ...}
     PlacesMVC->>API: CreatePlaceAsync(vm)
     API->>PlacesAPI: POST /api/places [JWT OwnerOnly]
-    PlacesAPI->>DB: INSERT Place {OwnerId=me, Status="Active", IsActive=true, IsApproved=false(default)}
-    Note over PlacesAPI,DB: IsApproved=false → không xuất hiện ở ToursPage mobile cho đến khi Admin duyệt
+    PlacesAPI->>DB: CreatePlaceAsync(dto) [IsApproved=false]
+    Note over PlacesAPI,DB: IsApproved=false → ẩn ở ToursPage mobile đến khi Admin duyệt
     DB-->>PlacesAPI: Place {PlaceId}
     PlacesAPI-->>API: 201 Created
-    PlacesMVC-->>Owner: Redirect /Places (danh sách quán của owner)
+    PlacesMVC-->>Owner: Redirect /Places
 
-    Owner->>PlacesMVC: GET /Places/Edit/{id} → POST /Places/Edit/{id} {Name, Phone, ...}
+    Owner->>PlacesMVC: POST /Places/Edit/{id} {Name, Phone, ...}
     PlacesMVC->>API: UpdatePlaceAsync(id, vm)
     API->>PlacesAPI: PUT /api/places/{id} [JWT OwnerOnly]
-    PlacesAPI->>DB: UPDATE Place {Name, Address, Phone, OpenTime, CloseTime, ...}
-    PlacesAPI-->>API: 200 OK + updated Place
+    PlacesAPI->>DB: UpdatePlaceAsync(id, dto)
+    PlacesAPI-->>API: 200 OK
     PlacesMVC-->>Owner: "Cập nhật thành công"
 
     Owner->>PlacesMVC: POST /Places/UpdateOpenStatus {id, openStatus}
-    PlacesMVC->>API: PUT /api/places/{id}/status ["Open"|"Closed"|"Busy"]
-    PlacesAPI->>DB: UPDATE Place SET OpenStatus = openStatus
-    Note over PlacesAPI,DB: Cache invalidated: places:detail:{id} + places:*
+    PlacesMVC->>API: UpdateOpenStatusAsync(id, openStatus)
+    PlacesAPI->>DB: SetOpenStatusAsync(id, openStatus)
+    Note over PlacesAPI,DB: Cache invalidated
     PlacesMVC-->>Owner: Redirect /Places
 
     Owner->>PlacesMVC: POST /Places/UpdateTtsScript {id, ttsScript}
-    PlacesMVC->>API: PUT /api/places/{id}/tts [JWT OwnerOnly]
-    PlacesAPI->>DB: UPDATE Place SET tts_script = ttsScript
+    PlacesMVC->>API: UpdateTtsScriptAsync(id, script)
+    PlacesAPI->>DB: SaveTtsScriptAsync(id, script)
     PlacesMVC-->>Owner: "Đã lưu TTS script"
 
     Owner->>PlacesMVC: POST translate button (Edit page)
-    PlacesMVC->>API: POST /api/places/{id}/tts/translate [JWT OwnerOnly]
-    Note over PlacesAPI: Đọc ANTHROPIC_API_KEY từ config
-    PlacesAPI->>Claude: POST https://api.anthropic.com/v1/messages
-    Note over PlacesAPI,Claude: Prompt: dịch tts_script → vi / en / zh / ko / ja / fr
+    PlacesMVC->>API: TranslateTtsAsync(id)
+    PlacesAPI->>Claude: TranslateToLocales(script, locales[vi,en,zh,ko,ja,fr])
     alt Claude API OK
-        Claude-->>PlacesAPI: JSON {"vi":"...","en":"...","zh":"...","ko":"...","ja":"...","fr":"..."}
-        PlacesAPI->>DB: UPDATE Places SET tts_translations = JSON_string
-        PlacesAPI-->>API: {success:true, translations}
+        Claude-->>PlacesAPI: TranslationsDto
+        PlacesAPI->>DB: SaveTtsTranslationsAsync(id, translations)
         PlacesMVC-->>Owner: "Đã dịch 6 ngôn ngữ"
-    else Lỗi API key / network
+    else Lỗi API key / rate limit / network
         Claude-->>PlacesAPI: 401 / 429 / 500
-        PlacesAPI-->>PlacesMVC: 500 + thông báo lỗi cụ thể
-        PlacesMVC-->>Owner: Hiện lỗi (key không hợp lệ / rate limit / network)
+        PlacesMVC-->>Owner: Hiện lỗi cụ thể
     end
 
-    Owner->>PlacesMVC: POST /Places/AddImage (via Edit page)
-    PlacesMVC->>API: POST /api/places/{id}/images {imageUrl, isMain} [JWT OwnerOnly]
+    Owner->>PlacesMVC: POST /Places/AddImage {imageUrl, isMain}
+    PlacesMVC->>API: AddImageAsync(id, dto)
     alt isMain=true
-        PlacesAPI->>DB: UPDATE PlaceImages SET IsMain=false WHERE PlaceId=id
+        PlacesAPI->>DB: ClearMainImageAsync(placeId)
     end
-    PlacesAPI->>DB: INSERT PlaceImages {PlaceId, ImageUrl, IsMain}
+    PlacesAPI->>DB: CreateImageAsync(dto)
     PlacesMVC-->>Owner: Ảnh đã thêm
 ```
 
@@ -1904,40 +1957,40 @@ sequenceDiagram
     participant DB as AppDbContext
 
     Owner->>ProfileMVC: GET /Profile
-    ProfileMVC->>API: GET /api/auth/profile
-    AuthAPI->>DB: SELECT User WHERE Id = me
+    ProfileMVC->>API: GetProfileAsync()
+    AuthAPI->>DB: FindUserById(ownerId)
     ProfileMVC-->>Owner: Trang profile (tên, email, phone)
 
     Owner->>ProfileMVC: POST /Profile/Edit {fullName, email, phone}
-    ProfileMVC->>API: PUT /api/auth/profile
-    AuthAPI->>DB: UPDATE User
+    ProfileMVC->>API: UpdateProfileAsync(vm)
+    AuthAPI->>DB: UpdateUserAsync(dto)
     ProfileMVC-->>Owner: "Đã cập nhật"
 
     Owner->>ProfileMVC: POST /Profile/ChangePassword {oldPwd, newPwd}
-    ProfileMVC->>API: PUT /api/auth/change-password
-    AuthAPI->>AuthAPI: BCrypt.Verify(oldPwd)
+    ProfileMVC->>API: ChangePasswordAsync(vm)
+    AuthAPI->>AuthAPI: BCrypt.Verify(oldPwd, hash)
     alt Sai mật khẩu cũ
         AuthAPI-->>ProfileMVC: 400
         ProfileMVC-->>Owner: "Mật khẩu cũ không đúng"
     else OK
-        AuthAPI->>DB: UPDATE PasswordHash
+        AuthAPI->>DB: UpdatePasswordHashAsync(userId, newHash)
         ProfileMVC-->>Owner: "Đã đổi mật khẩu"
     end
 
     Owner->>SubMVC: GET /Subscription/Plans
-    SubMVC->>API: GET /api/subscriptions/plans + GET /api/subscriptions/mine
-    SubAPI->>DB: SELECT SubscriptionPlans + Subscription hiện tại
+    SubMVC->>API: GetSubscriptionPlansAsync() + GetMySubscriptionAsync()
+    SubAPI->>DB: GetActivePlans() + GetCurrentSubscription(ownerId)
     SubMVC-->>Owner: Danh sách gói + trạng thái đang dùng
 
     Owner->>SubMVC: POST /Subscription/Checkout {planId}
-    SubMVC->>API: POST /api/subscriptions {planId}
-    SubAPI->>DB: INSERT Subscription {IsActive=false}
-    SubAPI-->>SubMVC: paymentUrl (VNPay / MoMo / Stripe)
+    SubMVC->>API: CreateSubscriptionAsync(planId)
+    SubAPI->>DB: CreateSubscriptionAsync(dto)
+    SubAPI-->>SubMVC: paymentUrl
     SubMVC-->>Owner: Redirect đến cổng thanh toán
 
     Owner->>SubMVC: GET /Subscription/History
-    SubMVC->>API: GET /api/subscriptions/history
-    SubAPI->>DB: SELECT Subscriptions WHERE OwnerId=me ORDER BY StartDate DESC
+    SubMVC->>API: GetSubscriptionHistoryAsync()
+    SubAPI->>DB: GetSubscriptionHistory(ownerId)
     SubMVC-->>Owner: Danh sách lịch sử gói
 ```
 
@@ -1955,33 +2008,33 @@ sequenceDiagram
 
     Admin->>SessionMVC: GET /Admin/Sessions?status=pending
     SessionMVC->>API: GetSessionStatsAsync() + GetSessionsAsync("pending")
-    SessionAPI->>DB: COUNT pending/active/total + SUM revenue sessions IsActive
-    SessionAPI->>DB: SELECT AccessSessions WHERE pending ORDER BY CreatedAt DESC
+    SessionAPI->>DB: GetSessionStats()
+    SessionAPI->>DB: GetSessionsByStatus("pending", page)
     DB-->>SessionMVC: stats + sessions[]
     SessionMVC-->>Admin: Stats card + bảng pending sessions
 
     Admin->>SessionMVC: POST /Admin/Sessions/Activate {sessionId}
-    SessionMVC->>API: POST /api/admin/sessions/{id}/activate
-    SessionAPI->>DB: FindAsync(sessionId)
+    SessionMVC->>API: ActivateSessionAsync(sessionId)
+    SessionAPI->>DB: FindSessionAsync(sessionId)
     alt Không tồn tại / đã active
         SessionAPI-->>SessionMVC: 404 / 400
         SessionMVC-->>Admin: Thông báo lỗi
     else OK
-        SessionAPI->>DB: IsActive=true, ActivatedAt=now, ExpiresAt=now+DurationHours
+        SessionAPI->>DB: ActivateSessionAsync(session)
         SessionMVC-->>Admin: "Đã kích hoạt" → Redirect
     end
 
     Admin->>SessionMVC: POST /Admin/Sessions/Deactivate {sessionId}
-    SessionMVC->>API: POST /api/admin/sessions/{id}/deactivate
-    SessionAPI->>DB: IsActive=false, ExpiresAt=now
+    SessionMVC->>API: DeactivateSessionAsync(sessionId)
+    SessionAPI->>DB: DeactivateSessionAsync(session)
     SessionMVC-->>Admin: "Đã thu hồi quyền truy cập"
 
     Admin->>SessionMVC: POST /Admin/Sessions/Cancel {sessionId}
-    SessionMVC->>API: DELETE /api/admin/sessions/{id}
+    SessionMVC->>API: DeleteSessionAsync(sessionId)
     alt IsActive=true
-        SessionAPI-->>SessionMVC: 400 "Không thể hủy session đã active"
+        SessionAPI-->>SessionMVC: 400
     else Pending OK
-        SessionAPI->>DB: Remove(session)
+        SessionAPI->>DB: DeleteSessionAsync(session)
         SessionMVC-->>Admin: "Đã hủy session"
     end
 ```
@@ -2003,51 +2056,50 @@ sequenceDiagram
     Admin->>PlacesMVC: GET /Admin/AdminPlaces
     PlacesMVC->>API: GetAdminPlacesAsync(pendingOnly=false)
     API->>AdminAPI: GET /api/admin/places [JWT AdminOnly]
-    AdminAPI->>DB: SELECT Places + Category + Images (SELECT, không Include thừa)
-    DB-->>API: {total, page, pageSize, items[]}
-    API-->>PlacesMVC: List<PlaceViewModel>
+    AdminAPI->>DB: GetAllPlacesAsync(filters)
+    DB-->>API: {total, page, items[]}
+    API-->>PlacesMVC: List~PlaceViewModel~
     PlacesMVC-->>Admin: Danh sách tất cả địa điểm
 
     Admin->>PlacesMVC: GET /Admin/AdminPlaces?pendingOnly=true
     PlacesMVC->>API: GetAdminPlacesAsync(pendingOnly=true)
     API->>AdminAPI: GET /api/admin/places?pendingOnly=true
-    AdminAPI->>DB: SELECT Places WHERE Status = "Pending"
+    AdminAPI->>DB: GetPendingPlacesAsync()
     DB-->>PlacesMVC: places chờ duyệt
-    PlacesMVC-->>Admin: Danh sách địa điểm có Status="Pending"
+    PlacesMVC-->>Admin: Danh sách chờ duyệt
 
     Admin->>PlacesMVC: GET /Admin/AdminPlaces/Detail/{id}
     PlacesMVC->>API: GetPlaceAsync(id)
     API->>AdminAPI: GET /api/places/{id}
-    AdminAPI->>DB: SELECT Place WHERE PlaceId=id AND IsActive=true
+    AdminAPI->>DB: FindPlaceAsync(id)
     DB-->>PlacesMVC: PlaceViewModel
-    PlacesMVC-->>Admin: Chi tiết địa điểm (ảnh, TTS, thông tin)
+    PlacesMVC-->>Admin: Chi tiết địa điểm
 
     Admin->>PlacesMVC: POST /Admin/AdminPlaces/Suspend {placeId}
     PlacesMVC->>API: SuspendPlaceAsync(id)
     API->>AdminAPI: PUT /api/admin/places/{id}/suspend [JWT AdminOnly]
-    AdminAPI->>DB: ExecuteUpdateAsync → Status = "Suspended"
-    PlacesMVC-->>Admin: "Đã tạm khóa quán" → Redirect /Admin/AdminPlaces
+    AdminAPI->>DB: SuspendPlaceAsync(id)
+    PlacesMVC-->>Admin: "Đã tạm khóa quán" → Redirect
 
     Note over Admin,UsersMVC: Quản lý tài khoản người dùng
     Admin->>UsersMVC: GET /Admin/AdminUsers?search=...&role=Owner
     UsersMVC->>API: GetUsersAsync(search, role)
-    API->>AdminAPI: GET /api/admin/users?search=...&role=Owner [JWT AdminOnly]
-    AdminAPI->>DB: SELECT Users WHERE Name/Email CONTAINS search AND Role=role
-    DB-->>API: List<UserDto> {UserId, FullName, Email, Phone, Role, IsActive}
+    API->>AdminAPI: GET /api/admin/users [JWT AdminOnly]
+    AdminAPI->>DB: SearchUsersAsync(search, role)
+    DB-->>API: List~UserDto~
     API-->>UsersMVC: users[]
-    UsersMVC-->>Admin: Danh sách tài khoản (có filter search + role)
+    UsersMVC-->>Admin: Danh sách tài khoản
 
     Admin->>UsersMVC: POST /Admin/AdminUsers/ToggleLock {userId}
     UsersMVC->>API: ToggleUserLockAsync(id)
     API->>AdminAPI: PUT /api/admin/users/{id}/lock [JWT AdminOnly]
-    AdminAPI->>DB: user.IsActive = !user.IsActive
+    AdminAPI->>DB: ToggleUserActiveAsync(userId)
     UsersMVC-->>Admin: "Đã cập nhật trạng thái tài khoản" → Redirect
 
     Admin->>UsersMVC: POST /Admin/AdminUsers/ChangeRole {userId, role}
-    Note over UsersMVC: role ∈ ["User", "Owner", "Admin"]
     UsersMVC->>API: ChangeUserRoleAsync(id, role)
     API->>AdminAPI: PUT /api/admin/users/{id}/role [JWT AdminOnly]
-    AdminAPI->>DB: user.Role = role
+    AdminAPI->>DB: UpdateUserRoleAsync(userId, role)
     UsersMVC-->>Admin: "Đã đổi quyền tài khoản" → Redirect
 ```
 
@@ -2071,13 +2123,13 @@ sequenceDiagram
     else Đã đăng nhập
         DashMVC->>API: GetDashboardAsync()
         API->>AnalyticsAPI: GET /api/analytics/dashboard [JWT OwnerOnly]
-        AnalyticsAPI->>DB: SELECT Places WHERE OwnerId = me\n(PlaceId, Name, Status, OpenStatus, TotalVisits, AverageRating, TotalReviews)
-        AnalyticsAPI->>DB: COUNT Reviews WHERE PlaceId IN myPlaces\nAND OwnerReply IS NULL
-        AnalyticsAPI->>DB: COUNT Promotions WHERE PlaceId IN myPlaces\nAND IsActive AND EndDate > UtcNow
-        DB-->>AnalyticsAPI: aggregated results
-        AnalyticsAPI-->>API: {TotalPlaces, ApprovedPlaces,\nTotalVisitsThisMonth=0,\nPendingReviews, ActivePromotions,\nAvgRating, Places[]}
+        AnalyticsAPI->>DB: GetMyPlacesAsync(ownerId)
+        AnalyticsAPI->>DB: CountPendingReviews(ownerId)
+        AnalyticsAPI->>DB: CountActivePromotions(ownerId)
+        DB-->>AnalyticsAPI: DashboardDto
+        AnalyticsAPI-->>API: {TotalPlaces, ApprovedPlaces, PendingReviews, ActivePromotions, AvgRating, Places[]}
         API-->>DashMVC: DashboardViewModel
-        DashMVC-->>Owner: Cards thống kê + bảng địa điểm của owner\n(TotalPlaces, AvgRating, PendingReviews, ActivePromos)
+        DashMVC-->>Owner: Cards thống kê + bảng địa điểm của owner
     end
 ```
 
@@ -2096,26 +2148,26 @@ sequenceDiagram
     participant DB as AppDbContext
 
     Admin->>PkgMVC: GET /Admin/AdminPackages
-    PkgMVC->>API: GET /api/access-packages
-    PkgAPI->>DB: SELECT AccessPackages ORDER BY SortOrder
+    PkgMVC->>API: GetAccessPackagesAsync()
+    PkgAPI->>DB: GetAllPackagesAsync()
     DB-->>PkgMVC: 4 gói
     PkgMVC-->>Admin: 4 card với form chỉnh giá / duration / IsActive
 
-    Admin->>PkgMVC: POST /Admin/AdminPackages/Update {packageId, PriceVnd, DurationHours, ...}
-    PkgMVC->>API: PUT /api/access-packages/{id}
-    PkgAPI->>DB: UPDATE AccessPackage
+    Admin->>PkgMVC: POST /Admin/AdminPackages/Update {packageId, PriceVnd, ...}
+    PkgMVC->>API: UpdateAccessPackageAsync(id, dto)
+    PkgAPI->>DB: UpdatePackageAsync(id, dto)
     PkgMVC-->>Admin: "Đã cập nhật — app load giá mới khi vào SubscriptionPage"
 
     Admin->>DevMVC: GET /Admin/AdminDevices?search=...
-    DevMVC->>API: GET /api/admin/devices
-    DevAPI->>DB: SELECT DeviceRegistrations LEFT JOIN DevicePoiVisits, AccessSessions
-    DevAPI->>DB: COUNT DeviceRegistrations WHERE LastSeenAt >= UtcNow-15s (onlineCount)
-    DB-->>DevMVC: {total, onlineCount, items:[{DeviceId, Platform, FirstSeen, LastSeenAt, VisitCount, HasActive}]}
-    DevMVC-->>Admin: Bảng thiết bị + badge Kết nối (Đang dùng nếu LastSeenAt ≤ 15s)\ncounter "X đang hoạt động" trong header\nTrang tự reload mỗi 15s
+    DevMVC->>API: GetDeviceStatsAsync(page, search)
+    DevAPI->>DB: GetDeviceListAsync(filters)
+    DevAPI->>DB: CountOnlineDevices()
+    DB-->>DevMVC: {total, onlineCount, items[]}
+    DevMVC-->>Admin: Bảng thiết bị + badge "Đang dùng" (LastSeenAt ≤ 15s) — tự reload 15s
 
     Admin->>DevMVC: GET /Admin/AdminDevices/{deviceId}
-    DevMVC->>API: GET /api/admin/devices/{deviceId}/visits
-    DevAPI->>DB: SELECT DevicePoiVisits WHERE DeviceId=id ORDER BY VisitedAt DESC LIMIT 50
+    DevMVC->>API: GetDeviceVisitsAsync(deviceId)
+    DevAPI->>DB: GetRecentVisitsAsync(deviceId, limit=50)
     DB-->>DevMVC: visits[]
     DevMVC-->>Admin: Lịch sử 50 lượt ghé POI gần nhất
 ```
@@ -2182,8 +2234,8 @@ flowchart TD
     N --> O{nearest.PlaceId == _lastSpokenPlaceId?}
     O -->|Có| Z2
     O -->|Không| P[_lastSpokenPlaceId = nearestId\n_lastSpokenPlace = nearest\nnearest.LastPlayedAt = now]
-    P --> Q[SpeakFromGpsAsync - global 60s cooldown\nGetScriptForLocale locale]
-    Q --> R[AddHistoryByGpsAsync\nAddHistoryAsync local\nINSERT DevicePoiVisits Supabase\nTrigger TotalVisits++]
+    P --> Q[SpeakFromGpsAsync\nGetScriptForLocale - global 60s cooldown]
+    Q --> R[AddHistoryByGpsAsync\nAddHistoryAsync local Prefs\nRecordDevicePoiVisitAsync Supabase\nTrigger TotalVisits++]
     R --> Z2([Kết thúc])
 ```
 
