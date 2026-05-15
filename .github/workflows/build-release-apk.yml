@@ -1,0 +1,55 @@
+name: Build and Release APK
+
+on:
+  push:
+    tags:
+      - 'v*'  # Kích hoạt khi push tag v1.0.0, v2.0.0, etc.
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+    
+    - name: Install MAUI workload
+      run: dotnet workload install maui
+    
+    - name: Restore dependencies
+      run: |
+        cd TourGuideAPP
+        dotnet restore
+    
+    - name: Build APK
+      run: |
+        cd TourGuideAPP
+        dotnet publish -f net8.0-android -c Release -o ./publish
+    
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: TourGuideAPP/publish/com.tourguide.app-signed.apk
+        body: |
+          ## TourGuide App Release
+          
+          **Build Info:**
+          - Version: ${{ github.ref_name }}
+          - Build Date: $(date -u +'%Y-%m-%d %H:%M:%S UTC')
+          - Platform: Android
+          
+          **Download:**
+          - [APK Direct Download](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/com.tourguide.app-signed.apk)
+          
+          **Requirements:**
+          - Android 11+
+          - 50MB free storage
+          - GPS enabled
+          - Internet connection
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
